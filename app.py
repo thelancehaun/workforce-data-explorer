@@ -769,6 +769,14 @@ CHAT_WINDOW_SECONDS = 60
 CHAT_MAX_PER_WINDOW = 4
 
 
+def _chart_y_col(df: pd.DataFrame) -> Optional[str]:
+    """Column to plot: the measurement, never bookkeeping columns like 'year'."""
+    numeric = [c for c in df.select_dtypes(include="number").columns if c != "year"]
+    if "value" in numeric:
+        return "value"
+    return numeric[0] if numeric else None
+
+
 def render_chat():
     import time
     import workforce_data.chat as chat_engine
@@ -807,15 +815,15 @@ def render_chat():
                     chart_type = chart_info["chart_type"]
                     st.caption(label)
                     if chart_type == "line" and "date" in df.columns:
-                        numeric_cols = df.select_dtypes(include="number").columns.tolist()
-                        if numeric_cols:
-                            fig = px.line(df, x="date", y=numeric_cols[0], title=label)
+                        y_col = _chart_y_col(df)
+                        if y_col:
+                            fig = px.line(df, x="date", y=y_col, title=label)
                             st.plotly_chart(fig, use_container_width=True)
                     elif chart_type == "bar":
-                        numeric_cols = df.select_dtypes(include="number").columns.tolist()
+                        y_col = _chart_y_col(df)
                         cat_cols = df.select_dtypes(exclude="number").columns.tolist()
-                        if numeric_cols and cat_cols:
-                            fig = px.bar(df.head(20), x=cat_cols[0], y=numeric_cols[0], title=label)
+                        if y_col and cat_cols:
+                            fig = px.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
                             st.plotly_chart(fig, use_container_width=True)
                     st.download_button(
                         f"Download {label[:30]}… CSV" if len(label) > 30 else f"Download {label} CSV",
@@ -875,15 +883,15 @@ def render_chat():
 
                 st.caption(label)
                 if chart_type == "line" and "date" in df.columns:
-                    numeric_cols = df.select_dtypes(include="number").columns.tolist()
-                    if numeric_cols:
-                        fig = px.line(df, x="date", y=numeric_cols[0], title=label)
+                    y_col = _chart_y_col(df)
+                    if y_col:
+                        fig = px.line(df, x="date", y=y_col, title=label)
                         st.plotly_chart(fig, use_container_width=True)
                 elif chart_type == "bar":
-                    numeric_cols = df.select_dtypes(include="number").columns.tolist()
+                    y_col = _chart_y_col(df)
                     cat_cols = df.select_dtypes(exclude="number").columns.tolist()
-                    if numeric_cols and cat_cols:
-                        fig = px.bar(df.head(20), x=cat_cols[0], y=numeric_cols[0], title=label)
+                    if y_col and cat_cols:
+                        fig = px.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
                         st.plotly_chart(fig, use_container_width=True)
                 elif chart_type is None:
                     st.dataframe(df.head(30), use_container_width=True, hide_index=True)
