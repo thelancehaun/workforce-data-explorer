@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import ui_theme
 from workforce_data import catalog
 from workforce_data.sources import bls as bls_connector
+from workforce_data.sources import census as census_connector
 from workforce_data.sources import dol as dol_connector
 from workforce_data.sources import fred as fred_connector
 from workforce_data.sources import onet as onet_connector
@@ -112,6 +113,7 @@ def fetch_onet_detail(data_type: str, occ_code: str):
         "knowledge": onet_connector.get_knowledge,
         "work_activities": onet_connector.get_work_activities,
         "technology": onet_connector.get_technology,
+        "related": onet_connector.get_related_occupations,
     }
     return fn_map[data_type](occ_code)
 
@@ -151,6 +153,39 @@ def fetch_layoff_8k(start_date: str, end_date: str):
 @st.cache_data(ttl=1800, show_spinner=False)
 def fetch_company_filings(company: str, form_type: str):
     return sec_connector.search_company_filings(company, form_type=form_type)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_acs(variables: tuple, year: int, geography: str, state_fips=None):
+    dataset = "acs/acs5" if geography == "county" else "acs/acs1"
+    return census_connector.get_acs(list(variables), year=year, geography=geography,
+                                    state_fips=state_fips, dataset=dataset)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_qwi(indicators: tuple, state_fips: str, year_start: int, year_end: int):
+    return census_connector.get_qwi(list(indicators), state_fips=state_fips,
+                                    year_start=year_start, year_end=year_end)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_cbp(year: int, geography: str):
+    return census_connector.get_cbp(year=year, geography=geography)
+
+
+US_STATES = {
+    "Alabama": "01", "Alaska": "02", "Arizona": "04", "Arkansas": "05", "California": "06",
+    "Colorado": "08", "Connecticut": "09", "Delaware": "10", "District of Columbia": "11",
+    "Florida": "12", "Georgia": "13", "Hawaii": "15", "Idaho": "16", "Illinois": "17",
+    "Indiana": "18", "Iowa": "19", "Kansas": "20", "Kentucky": "21", "Louisiana": "22",
+    "Maine": "23", "Maryland": "24", "Massachusetts": "25", "Michigan": "26", "Minnesota": "27",
+    "Mississippi": "28", "Missouri": "29", "Montana": "30", "Nebraska": "31", "Nevada": "32",
+    "New Hampshire": "33", "New Jersey": "34", "New Mexico": "35", "New York": "36",
+    "North Carolina": "37", "North Dakota": "38", "Ohio": "39", "Oklahoma": "40", "Oregon": "41",
+    "Pennsylvania": "42", "Rhode Island": "44", "South Carolina": "45", "South Dakota": "46",
+    "Tennessee": "47", "Texas": "48", "Utah": "49", "Vermont": "50", "Virginia": "51",
+    "Washington": "53", "West Virginia": "54", "Wisconsin": "55", "Wyoming": "56",
+}
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -293,21 +328,23 @@ def render_catalog():
 
 def _source_card(src: dict):
     has_api = src.get("connector") in ("fred", "bls", "census", "onet", "dol", "sec")
-    geo = ", ".join(src.get("geography", []))
-    topics = " · ".join(src.get("topics", [])[:8])
+    topics = " · ".join(src.get("topics", [])[:6])
 
     col1, col2 = st.columns([5, 1])
     with col1:
-        st.markdown(f"**{src['name']}** `{src['id']}`")
+        st.markdown(f"**{src['name']}**")
+        b1, b2, b3 = st.columns([1, 1, 4])
+        b1.badge("Live API" if has_api else "External",
+                 color="green" if has_api else "gray",
+                 icon=":material/api:" if has_api else ":material/open_in_new:")
+        b2.badge(src.get("frequency", "—"), color="blue")
+        if src.get("free"):
+            b3.badge("Free", color="violet")
         st.caption(f"*{src.get('provider', '')}* — {src.get('description', '')}")
-        st.caption(f"Topics: {topics} | Geography: {geo} | Frequency: {src.get('frequency', '')} | Connector: `{src.get('connector', '')}`")
+        st.caption(f"{topics}")
         if src.get("notes"):
             st.caption(f"Note: {src['notes']}")
     with col2:
-        if has_api:
-            st.success("API Ready", icon="🔗")
-        else:
-            st.info("External", icon="🌐")
         if src.get("url"):
             st.markdown(f"[Source ↗]({src['url']})")
     st.divider()
@@ -583,7 +620,7 @@ def render_onet():
             with col1:
                 data_type = st.radio(
                     "Data to load",
-                    ["skills", "tasks", "abilities", "knowledge", "work_activities", "technology"],
+                    ["skills", "tasks", "abilities", "knowledge", "work_activities", "technology", "related"],
                     horizontal=True,
                 )
             with col2:
@@ -625,21 +662,143 @@ def render_onet():
     st.divider()
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Load Bright Outlook Occupations", use_container_width=True):
+        if st.button("Load High-Preparation Occupations (Job Zones 4–5)", use_container_width=True):
             with st.spinner("Loading…"):
                 try:
                     df = fetch_onet_list("bright")
-                    st.success(f"{len(df)} Bright Outlook occupations")
+                    st.success(f"{len(df)} high-preparation occupations")
+                    st.caption("Approximate list derived from O*NET Job Zone data — "
+                               "not the official BLS Bright Outlook designation.")
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 except Exception as e:
                     st.error(str(e))
     with col2:
-        if st.button("Load Green Economy Occupations", use_container_width=True):
+        if st.button("Load Green-Economy-Related Occupations (keyword match)", use_container_width=True):
             with st.spinner("Loading…"):
                 try:
                     df = fetch_onet_list("green")
-                    st.success(f"{len(df)} Green Economy occupations")
+                    st.success(f"{len(df)} green-economy-related occupations")
+                    st.caption("Keyword-derived from occupation titles and descriptions — "
+                               "not O*NET's official Green Economy taxonomy.")
                     st.dataframe(df, use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Page: Census
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_census():
+    st.header("Census Workforce Data")
+    st.markdown("American Community Survey demographics, Quarterly Workforce Indicators, and County Business Patterns.")
+
+    tab1, tab2, tab3 = st.tabs(["ACS Demographics", "QWI Workforce Flows", "Business Patterns"])
+
+    with tab1:
+        st.caption("Employment, income, commuting, and education by state or county (American Community Survey).")
+        variables = census_connector.list_acs_variables()
+        col1, col2, col3 = st.columns([3, 1, 1.4])
+        with col1:
+            sel_vars = st.multiselect(
+                "Variables", list(variables), default=["employed", "median_household_income"],
+                format_func=lambda v: v.replace("_", " ").title(),
+            )
+        with col2:
+            acs_year = st.selectbox("Year", [2023, 2022, 2021, 2019])
+        with col3:
+            geography = st.selectbox("Geography", ["state", "county", "national"])
+
+        state_fips = None
+        if geography == "county":
+            state_name = st.selectbox("State", list(US_STATES))
+            state_fips = US_STATES[state_name]
+
+        if st.button("Fetch ACS Data", type="primary") and sel_vars:
+            with st.spinner("Fetching from the Census API…"):
+                try:
+                    df = fetch_acs(tuple(sel_vars), acs_year, geography, state_fips)
+                    if df.empty:
+                        st.info("No data returned — this year/geography combination may not be "
+                                "available. Try 5-year data via county geography, or another year.")
+                    else:
+                        st.success(f"{len(df):,} rows")
+                        first_var = sel_vars[0]
+                        if geography in ("state", "county") and first_var in df.columns:
+                            top = df.nlargest(15, first_var)
+                            fig = ui_theme.bar(
+                                top, x=first_var, y="NAME", horizontal=True,
+                                title=f"Top 15 by {first_var.replace('_', ' ')} — ACS {acs_year}",
+                                labels={first_var: first_var.replace("_", " "), "NAME": ""},
+                            )
+                            fig.update_yaxes(autorange="reversed", showgrid=False)
+                            st.plotly_chart(fig, use_container_width=True)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        st.download_button("Download CSV", df.to_csv(index=False),
+                                           file_name=f"acs_{acs_year}_{geography}.csv", mime="text/csv")
+                except Exception as e:
+                    st.error(str(e))
+
+    with tab2:
+        st.caption("Hires, separations, and earnings by state over time (LEHD Quarterly Workforce Indicators).")
+        indicators = census_connector.list_qwi_indicators()
+        col1, col2, col3 = st.columns([3, 1.5, 2])
+        with col1:
+            sel_ind = st.multiselect(
+                "Indicators", list(indicators), default=["hires_all", "separations"],
+                format_func=lambda v: v.replace("_", " ").title(),
+            )
+        with col2:
+            qwi_state = st.selectbox("State", list(US_STATES), index=list(US_STATES).index("California"))
+        with col3:
+            qwi_years = st.slider("Years", 2010, 2024, (2018, 2024))
+
+        if st.button("Fetch QWI Data", type="primary") and sel_ind:
+            with st.spinner("Fetching from the Census API…"):
+                try:
+                    df = fetch_qwi(tuple(sel_ind), US_STATES[qwi_state], qwi_years[0], qwi_years[1])
+                    if df.empty:
+                        st.info("No data returned — QWI coverage varies by state and year.")
+                    else:
+                        st.success(f"{len(df):,} quarterly observations — {qwi_state}")
+                        code_to_name = {v: k.replace("_", " ").title() for k, v in indicators.items()}
+                        value_cols = [c for c in df.columns if c in code_to_name]
+                        long = df.melt(id_vars=["date"], value_vars=value_cols,
+                                       var_name="indicator", value_name="value")
+                        long["indicator"] = long["indicator"].map(code_to_name)
+                        fig = ui_theme.line(long, x="date", y="value", color="indicator",
+                                            title=f"Quarterly workforce flows — {qwi_state}")
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        st.download_button("Download CSV", df.to_csv(index=False),
+                                           file_name=f"qwi_{US_STATES[qwi_state]}.csv", mime="text/csv")
+                except Exception as e:
+                    st.error(str(e))
+
+    with tab3:
+        st.caption("Establishments, employment, and payroll by industry (County Business Patterns).")
+        col1, col2 = st.columns([1, 3])
+        with col1:
+            cbp_year = st.selectbox("Year", [2023, 2022, 2021], key="cbp_year")
+        if st.button("Fetch Business Patterns", type="primary"):
+            with st.spinner("Fetching from the Census API…"):
+                try:
+                    df = fetch_cbp(cbp_year, "national")
+                    if df.empty:
+                        st.info(f"No CBP data for {cbp_year} yet — try an earlier year.")
+                    else:
+                        sectors = df[(df["NAICS2017"].str.len() == 2) & (df["NAICS2017"] != "00")].nlargest(15, "EMP")
+                        if not sectors.empty:
+                            fig = ui_theme.bar(
+                                sectors, x="EMP", y="NAICS2017_LABEL", horizontal=True,
+                                title=f"US employment by sector — CBP {cbp_year}",
+                                labels={"EMP": "Employees", "NAICS2017_LABEL": ""},
+                            )
+                            fig.update_yaxes(autorange="reversed", showgrid=False)
+                            st.plotly_chart(fig, use_container_width=True)
+                        st.dataframe(df, use_container_width=True, hide_index=True)
+                        st.download_button("Download CSV", df.to_csv(index=False),
+                                           file_name=f"cbp_{cbp_year}.csv", mime="text/csv")
                 except Exception as e:
                     st.error(str(e))
 
@@ -1060,6 +1219,7 @@ pg = st.navigation({
         st.Page(render_catalog, title="Catalog", icon="🗂️", url_path="catalog"),
         st.Page(render_fred, title="FRED Time Series", icon="📈", url_path="fred"),
         st.Page(render_bls, title="BLS Series", icon="🏭", url_path="bls"),
+        st.Page(render_census, title="Census", icon="🗺️", url_path="census"),
         st.Page(render_onet, title="O*NET Occupations", icon="🧰", url_path="occupations"),
         st.Page(render_dol, title="DOL Enforcement", icon="⚖️", url_path="dol"),
         st.Page(render_sec, title="SEC Filings", icon="🏛️", url_path="sec"),
