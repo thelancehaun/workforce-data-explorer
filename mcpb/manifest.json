@@ -1,0 +1,30 @@
+{
+  "manifest_version": "0.2",
+  "name": "workforce-data",
+  "display_name": "Workforce Data",
+  "version": "1.0.0",
+  "description": "Live US labor market data in Claude: FRED, BLS, Census, O*NET, DOL, SEC, Indeed job postings, and AI-usage measures — 15 tools.",
+  "author": {
+    "name": "Lance Haun"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/thelancehaun/workforce-data-explorer"
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "run",
+    "mcp_config": {
+      "command": "${user_config.repo_dir}/.venv/bin/python",
+      "args": ["${user_config.repo_dir}/mcp_server.py"]
+    }
+  },
+  "user_config": {
+    "repo_dir": {
+      "type": "directory",
+      "title": "workforce-data-explorer folder",
+      "description": "The folder where you cloned the repo and created .venv (see the README's Run-it-yourself steps).",
+      "required": true
+    }
+  }
+}

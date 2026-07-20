@@ -59,8 +59,21 @@ exposure by occupation — and your AI decides which to call.
 
 **ChatGPT** — Settings → Connectors (developer mode) → add the same URL.
 
-**Claude Desktop (runs locally)** — after cloning the repo (see below), add to
-`claude_desktop_config.json`:
+**Claude Desktop app, running locally** — the easy way is the extension bundle:
+
+1. Clone the repo and create the venv (see [Run it yourself](#️-run-it-yourself)).
+2. Download **`Workforce-Data.mcpb`** from the
+   [latest release](https://github.com/thelancehaun/workforce-data-explorer/releases/latest)
+   and double-click it.
+3. Claude opens an install dialog — click **Install**, then point it at your
+   cloned repo folder when asked. The connector appears in Settings →
+   Extensions with an on/off toggle. Done — no config files.
+
+<details>
+<summary>Alternative: manual <code>claude_desktop_config.json</code> entry</summary>
+
+> ⚠️ **Edit this file only while Claude is fully quit (⌘Q).** The app rewrites
+> it from memory on exit, so edits made while it's running are silently lost.
 
 ```json
 {
@@ -71,6 +84,13 @@ exposure by occupation — and your AI decides which to call.
     }
   }
 }
+```
+</details>
+
+**Claude Code** — one command, available in every session:
+
+```bash
+claude mcp add --scope user workforce-data -- /path/to/workforce-data/.venv/bin/python /path/to/workforce-data/mcp_server.py
 ```
 
 > The hosted connector runs on a free tier that sleeps when idle — the first
