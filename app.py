@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 import ui_theme
 from workforce_data import catalog
+from workforce_data.sources import aei as aei_connector
 from workforce_data.sources import bls as bls_connector
 from workforce_data.sources import census as census_connector
 from workforce_data.sources import dol as dol_connector
@@ -58,7 +59,7 @@ with st.sidebar:
         st.caption("All free — see the About page for signup links.")
 
 
-LIVE_CONNECTORS = ("fred", "bls", "census", "onet", "dol", "sec", "indeed")
+LIVE_CONNECTORS = ("fred", "bls", "census", "onet", "dol", "sec", "indeed", "aei")
 
 
 # ── Cached data access ────────────────────────────────────────────────────────
@@ -205,6 +206,11 @@ def fetch_indeed_sectors() -> list:
 @st.cache_data(ttl=DAY, show_spinner=False)
 def fetch_ai_share(start_date: str):
     return indeed_connector.get_ai_postings_share(start_date=start_date)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_ai_exposure(occupation=None):
+    return aei_connector.get_job_exposure(occupation)
 
 
 from workforce_data.us_states import NAME_TO_ABBREV, NAME_TO_FIPS as US_STATES
@@ -705,6 +711,35 @@ def render_onet():
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 except Exception as e:
                     st.error(str(e))
+
+    st.divider()
+    st.subheader("AI usage by occupation")
+    st.caption(
+        "Share of each occupation's O*NET tasks observed in real Claude usage — "
+        "from the Anthropic Economic Index. A direct measure of where AI is "
+        "actually being used, not a prediction."
+    )
+    try:
+        exposure = fetch_ai_exposure()
+        q = st.text_input("Find an occupation", placeholder='e.g. "software", "nurse", "paralegal"', key="aei_q")
+        if q:
+            hits = fetch_ai_exposure(q)
+            if hits.empty:
+                st.info("No occupations matched.")
+            else:
+                for _, row in hits.head(5).iterrows():
+                    st.metric(row["title"], f"{row['observed_exposure']:.1%}",
+                              f"rank {row['rank']} of {len(exposure)}", delta_color="off")
+        top = exposure.head(20)
+        fig = ui_theme.bar(top, x="observed_exposure", y="title", horizontal=True, height=600,
+                           title="Top 20 occupations by AI-usage exposure",
+                           labels={"observed_exposure": "Share of tasks observed in AI usage", "title": ""})
+        fig.update_yaxes(autorange="reversed", showgrid=False)
+        fig.update_xaxes(tickformat=".0%")
+        st.plotly_chart(fig, use_container_width=True)
+        st.caption(f"{aei_connector.ATTRIBUTION} — [huggingface.co/datasets/Anthropic/EconomicIndex](https://huggingface.co/datasets/Anthropic/EconomicIndex)")
+    except Exception as e:
+        st.error(str(e))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

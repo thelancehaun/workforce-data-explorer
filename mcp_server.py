@@ -281,6 +281,24 @@ def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
     return impl.get_ai_postings_share(start_date=start_date)
 
 
+# ── AI & occupations ──────────────────────────────────────────────────────────
+
+@mcp.tool()
+@_ttl_cache(DAY)
+def get_ai_occupation_exposure(occupation: str = "") -> str:
+    """How exposed an occupation is to AI, measured from real-world Claude
+    usage mapped to O*NET tasks (Anthropic Economic Index; 756 SOC
+    occupations, exposure 0-1). Pairs well with get_occupation_wages and
+    get_onet_details.
+
+    Args:
+        occupation: Title substring ('software', 'nurse') or SOC code prefix
+            ('15-1252'). Empty returns the top-20 most-exposed occupations.
+    """
+    impl.clear_stored_dfs()
+    return impl.get_ai_occupation_exposure(occupation)
+
+
 # ── State labor markets ───────────────────────────────────────────────────────
 
 @mcp.tool()

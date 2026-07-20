@@ -187,6 +187,20 @@ TOOL_DEFS = [
     {
         "type": "function",
         "function": {
+            "name": "get_ai_occupation_exposure",
+            "description": "How exposed an occupation is to AI, measured from real Claude usage mapped to O*NET tasks (Anthropic Economic Index). Empty occupation returns the top-20 most-exposed occupations.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "occupation": {"type": "string", "description": "Occupation title substring (e.g. 'software', 'nurse') or SOC code prefix ('15-1252')"},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_state_labor_market",
             "description": "One-call snapshot of a US state's labor market: unemployment rate, nonfarm payrolls, weekly UI claims, and JOLTS openings/quits, each with latest and year-ago values.",
             "parameters": {
@@ -450,6 +464,27 @@ def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
         return json.dumps({"error": str(e)})
 
 
+def get_ai_occupation_exposure(occupation: str = "") -> str:
+    from .sources import aei
+    try:
+        df = aei.get_job_exposure(occupation or None)
+        if df.empty:
+            return json.dumps({"message": f"No occupations matched '{occupation}'."})
+        if occupation:
+            label = f"AI-usage exposure — occupations matching '{occupation}'"
+            _store_df("aei_exposure_match", df, label, None)
+        else:
+            label = "Top 20 occupations by AI-usage exposure"
+            _store_df("aei_exposure_top", df.head(20)[["title", "observed_exposure"]], label, "bar")
+            df = df.head(20)
+        summary = _df_summary(df, label)
+        summary["note"] = ("observed_exposure = share of the occupation's O*NET tasks observed in "
+                           "real Claude usage (0-1). Source: Anthropic Economic Index.")
+        return json.dumps(summary)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 def get_state_labor_market(state: str) -> str:
     from .sources.bls import get_series as bls_get_series
     from .sources.fred import get_series as fred_get_series
@@ -523,6 +558,7 @@ TOOL_MAP = {
     "get_job_postings": get_job_postings,
     "get_ai_postings_share": get_ai_postings_share,
     "get_state_labor_market": get_state_labor_market,
+    "get_ai_occupation_exposure": get_ai_occupation_exposure,
 }
 
 
