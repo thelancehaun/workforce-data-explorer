@@ -1306,7 +1306,7 @@ def render_settings():
         </div>
         <script>
           (function () {
-            var p1 = "lance", p2 = "beaconturn", p3 = "com";
+            var p1 = "hi", p2 = "beaconturn", p3 = "com";
             var link = document.getElementById("contact-link");
             var addr = p1 + "\\u0040" + p2 + "\\u002e" + p3;
             link.addEventListener("click", function (e) {
