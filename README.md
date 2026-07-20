@@ -133,6 +133,16 @@ workforce_data/
 Fetched data is cached in memory in both apps (1 hour for time series, up to a
 day for searches and metadata), so repeat queries don't burn API quota.
 
+## Bugs, ideas, and working together
+
+- **Bug or wrong-looking data?**
+  [Open an issue](https://github.com/thelancehaun/workforce-data-explorer/issues/new/choose)
+  — templates make it quick.
+- **Want to suggest a data source?** Same place — there's a template for that.
+- **Working together / press:** the contact link is on the app's
+  [About page](https://workforce-data-explorer.streamlit.app/settings)
+  (kept off GitHub so scrapers don't get it).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

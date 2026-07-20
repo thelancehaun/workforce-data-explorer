@@ -1284,6 +1284,43 @@ def render_settings():
     | **O*NET** | Optional — higher rate limits | [services.onetcenter.org](https://services.onetcenter.org/) |
     """)
 
+    st.subheader("Feedback & contact")
+    st.markdown(f"""
+    - **Found a bug or a wrong-looking number?**
+      [Open an issue on GitHub]({GITHUB_URL}/issues/new/choose) — there are quick
+      templates for bugs, data problems, and source suggestions.
+    - **Want to suggest a data source?** Same place — use the *Data problem or
+      source suggestion* template.
+    """)
+    # Email is assembled in the browser from parts so address-harvesting bots
+    # scraping the page source (or this repo) never see it in one piece.
+    import streamlit.components.v1 as components
+    components.html(
+        """
+        <div style="font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+                    font-size: 14.5px; color: #52514e;">
+          Interested in working together, or press?
+          <a id="contact-link" href="#" style="color: #1c5cab; font-weight: 600;">
+            Click to email me</a>
+          <noscript>(enable JavaScript to reveal the address)</noscript>
+        </div>
+        <script>
+          (function () {
+            var p1 = "lance", p2 = "beaconturn", p3 = "com";
+            var link = document.getElementById("contact-link");
+            var addr = p1 + "\\u0040" + p2 + "\\u002e" + p3;
+            link.addEventListener("click", function (e) {
+              e.preventDefault();
+              window.location.href = "\\u006d\\u0061\\u0069\\u006c\\u0074\\u006f:" + addr
+                + "?subject=" + encodeURIComponent("Workforce Data Explorer");
+            });
+            link.addEventListener("mouseover", function () { link.textContent = addr; });
+          })();
+        </script>
+        """,
+        height=32,
+    )
+
     st.subheader("Data cache")
     st.caption(
         "Fetched data is cached in memory (1 hour for time series, up to a day "

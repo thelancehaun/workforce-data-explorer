@@ -1,0 +1,24 @@
+name: Data problem or source suggestion
+description: Wrong-looking numbers, a stale source, or a data source you think belongs here
+labels: ["data"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind?
+      options:
+        - The numbers look wrong
+        - A source seems stale or broken
+        - Suggest a new data source
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: >
+        For wrong numbers: which page/tool, which series, and what you expected
+        (a link to the official source helps). For new sources: what it is, where
+        it lives, and whether it has free programmatic access.
+    validations:
+      required: true

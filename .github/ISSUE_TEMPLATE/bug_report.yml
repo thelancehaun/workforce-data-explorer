@@ -1,0 +1,32 @@
+name: Bug report
+description: Something broken in the dashboard, the MCP connector, or a data connector
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where did you hit it?
+      options:
+        - Dashboard (workforce-data-explorer.streamlit.app)
+        - MCP connector (via Claude / ChatGPT)
+        - Running it locally
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what did you see instead?
+      placeholder: "I fetched X on the Y page and got..."
+    validations:
+      required: true
+  - type: input
+    id: when
+    attributes:
+      label: When (roughly)?
+      placeholder: "2026-07-20, ~2pm ET"
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Error text, screenshots, the exact query or question you asked.
