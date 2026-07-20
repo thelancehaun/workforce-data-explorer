@@ -304,8 +304,19 @@ def main():
     args = parser.parse_args()
 
     if args.http:
+        from mcp.server.transport_security import TransportSecuritySettings
+
         mcp.settings.host = args.host
         mcp.settings.port = args.port
+        # Public hosted server: accept requests for any Host header. The SDK's
+        # DNS-rebinding protection defaults to localhost-only and returns
+        # HTTP 421 for real domains.
+        mcp.settings.transport_security = TransportSecuritySettings(
+            enable_dns_rebinding_protection=False
+        )
+        # Stateless mode: each request is self-contained, so the server
+        # tolerates free-tier spin-downs and load-balanced clients.
+        mcp.settings.stateless_http = True
         mcp.run(transport="streamable-http")
     else:
         mcp.run()
