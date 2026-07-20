@@ -32,37 +32,114 @@ st.set_page_config(
 )
 
 
-# ── Sidebar ───────────────────────────────────────────────────────────────────
+# ── Sidebar (navigation renders itself via st.navigation at the bottom) ───────
+
+MCP_URL = "https://workforce-data-mcp.onrender.com/mcp"
+GITHUB_URL = "https://github.com/thelancehaun/workforce-data-explorer"
 
 with st.sidebar:
-    st.title("Workforce Data Explorer")
     _n_live = sum(1 for s in catalog.SOURCES if s.get("connector") != "external")
     st.caption(f"{len(catalog.SOURCES)} curated data sources — {_n_live} with live API access")
-    st.divider()
 
-    page = st.radio(
-        "Navigate",
-        [
-            "AI Assistant",
-            "Catalog",
-            "FRED Time Series",
-            "BLS Series",
-            "O*NET Occupations",
-            "DOL Enforcement",
-            "SEC Filings",
-            "Cache & Settings",
-        ],
-        label_visibility="collapsed",
+    with st.expander("API key status"):
+        _keys = [
+            ("FRED", "FRED_API_KEY"), ("BLS", "BLS_API_KEY"), ("Census", "CENSUS_API_KEY"),
+            ("O*NET", "ONET_API_KEY"), ("DOL", "DOL_API_KEY"), ("Groq (chat)", "GROQ_API_KEY"),
+        ]
+        st.markdown("\n".join(
+            f"- {':green[●]' if os.getenv(v, '') else ':gray[○]'} {n}" for n, v in _keys
+        ))
+        st.caption("All free — see the About page for signup links.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Page: Overview
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SAMPLE_QUESTIONS = [
+    "How have quits and job openings moved since 2022?",
+    "What's happening with layoffs at public companies this month?",
+    "Compare software developer and registered nurse wages",
+]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _overview_series(series_id: str) -> pd.DataFrame:
+    from datetime import timedelta
+    start = (date.today() - timedelta(days=730)).isoformat()
+    return fred_connector.get_series(series_id, start_date=start)
+
+
+def _sparkline(df: pd.DataFrame):
+    fig = ui_theme.line(df, x="date", y="value", height=88)
+    fig.update_layout(
+        margin=dict(t=4, b=4, l=4, r=4), showlegend=False, hovermode=False,
+        xaxis_visible=False, yaxis_visible=False,
+    )
+    return fig
+
+
+def render_overview():
+    st.title("The US labor market, right now")
+    st.caption(
+        "Live data from FRED, BLS, Census, O*NET, DOL, and SEC — "
+        f"{len(catalog.SOURCES)} curated sources behind one interface."
     )
 
+    try:
+        unrate = _overview_series("UNRATE")
+        payems = _overview_series("PAYEMS")
+        jtsjol = _overview_series("JTSJOL")
+        icsa = _overview_series("ICSA")
+
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            latest, prev = unrate["value"].iloc[-1], unrate["value"].iloc[-2]
+            st.metric("Unemployment rate", f"{latest:.1f}%", f"{latest - prev:+.1f}pp",
+                      delta_color="inverse", help="U-3, seasonally adjusted (UNRATE)")
+            st.plotly_chart(_sparkline(unrate), use_container_width=True, key="spark_unrate")
+        with c2:
+            chg = payems["value"].iloc[-1] - payems["value"].iloc[-2]
+            st.metric("Payrolls, monthly change", f"{chg:+,.0f}K",
+                      help="Total nonfarm payrolls, month-over-month (PAYEMS)")
+            st.plotly_chart(_sparkline(payems), use_container_width=True, key="spark_payems")
+        with c3:
+            latest, prev = jtsjol["value"].iloc[-1], jtsjol["value"].iloc[-2]
+            st.metric("Job openings", f"{latest / 1000:.1f}M", f"{(latest - prev) / 1000:+.2f}M",
+                      help="JOLTS total nonfarm openings (JTSJOL)")
+            st.plotly_chart(_sparkline(jtsjol), use_container_width=True, key="spark_jtsjol")
+        with c4:
+            latest, prev = icsa["value"].iloc[-1], icsa["value"].iloc[-2]
+            st.metric("Weekly UI claims", f"{latest / 1000:.0f}K", f"{(latest - prev) / 1000:+.0f}K",
+                      delta_color="inverse", help="Initial claims, seasonally adjusted (ICSA)")
+            st.plotly_chart(_sparkline(icsa), use_container_width=True, key="spark_icsa")
+        st.caption(f"Sparklines show the last two years. Latest data through {unrate['date'].iloc[-1]:%B %Y}.")
+    except Exception:
+        st.info("Headline stats need a FRED API key — free at fred.stlouisfed.org. "
+                "Everything else on this page still works.")
+
     st.divider()
-    st.markdown("**API Key Status**")
-    for name, env_var in [("FRED", "FRED_API_KEY"), ("BLS", "BLS_API_KEY"), ("Census", "CENSUS_API_KEY"), ("O*NET", "ONET_API_KEY")]:
-        if os.getenv(env_var, ""):
-            st.success(f"{name} ✓", icon="🔑")
-        else:
-            st.warning(f"{name} — not set", icon="⚠️")
-    st.caption("Add keys to `.env` to raise rate limits.")
+    st.subheader("Ask the data")
+    st.caption("The AI Assistant answers in plain English, with charts, from the live sources.")
+    qcols = st.columns(len(SAMPLE_QUESTIONS))
+    for col, q in zip(qcols, SAMPLE_QUESTIONS):
+        with col:
+            if st.button(q, use_container_width=True, key=f"sample_{hash(q)}"):
+                st.session_state["pending_chat_prompt"] = q
+                st.switch_page(PAGE_ASSISTANT)
+
+    st.divider()
+    st.subheader("Three ways to use this")
+    t1, t2, t3 = st.columns(3)
+    with t1:
+        st.markdown("**🖥️ This dashboard**")
+        st.caption("Browse, chart, and download any series — no setup needed. Start with the Catalog.")
+    with t2:
+        st.markdown("**🤖 Your own AI**")
+        st.caption(f"Add the MCP connector to Claude or ChatGPT and just ask: `{MCP_URL}`")
+    with t3:
+        st.markdown(f"**⚙️ Run it yourself**")
+        st.caption(f"MIT-licensed on [GitHub]({GITHUB_URL}) — dashboard, connector, and API layer.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -822,8 +899,12 @@ def render_chat():
                         key=f"dl_{label[:40]}_{id(df)}",
                     )
 
-    # Chat input
+    # Chat input — a sample-question button on the Overview page may have
+    # queued a prompt before switching to this page
     user_input = st.chat_input("Ask anything: 'What's the current unemployment rate?' or 'Show me JOLTS job openings since 2020'")
+    pending = st.session_state.pop("pending_chat_prompt", None)
+    if not user_input and pending:
+        user_input = pending
 
     if user_input:
         # Throttle only applies to the shared server key
@@ -915,15 +996,21 @@ def render_chat():
 # Router — must be after all function definitions
 # ═══════════════════════════════════════════════════════════════════════════════
 
-PAGE_MAP = {
-    "AI Assistant": render_chat,
-    "Catalog": render_catalog,
-    "FRED Time Series": render_fred,
-    "BLS Series": render_bls,
-    "O*NET Occupations": render_onet,
-    "DOL Enforcement": render_dol,
-    "SEC Filings": render_sec,
-    "Cache & Settings": render_cache,
-}
+PAGE_OVERVIEW = st.Page(render_overview, title="Overview", icon="🏠", default=True, url_path="overview")
+PAGE_ASSISTANT = st.Page(render_chat, title="AI Assistant", icon="💬", url_path="assistant")
 
-PAGE_MAP[page]()
+pg = st.navigation({
+    "": [PAGE_OVERVIEW, PAGE_ASSISTANT],
+    "Explore data": [
+        st.Page(render_catalog, title="Catalog", icon="🗂️", url_path="catalog"),
+        st.Page(render_fred, title="FRED Time Series", icon="📈", url_path="fred"),
+        st.Page(render_bls, title="BLS Series", icon="🏭", url_path="bls"),
+        st.Page(render_onet, title="O*NET Occupations", icon="🧰", url_path="occupations"),
+        st.Page(render_dol, title="DOL Enforcement", icon="⚖️", url_path="dol"),
+        st.Page(render_sec, title="SEC Filings", icon="🏛️", url_path="sec"),
+    ],
+    "Reference": [
+        st.Page(render_cache, title="Cache & Settings", icon="⚙️", url_path="settings"),
+    ],
+})
+pg.run()

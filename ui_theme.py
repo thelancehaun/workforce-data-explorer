@@ -49,7 +49,6 @@ def style_fig(fig, height: Optional[int] = None, hovermode: str = "x unified"):
         colorway=palette(),
         hovermode=hovermode,
         font=dict(family=_FONT, color=c["ink"], size=13),
-        title_font=dict(size=15, color=c["ink"]),
         margin=dict(t=48, b=16, l=8, r=8),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0, title_text=""),
     )
@@ -61,6 +60,10 @@ def style_fig(fig, height: Optional[int] = None, hovermode: str = "x unified"):
         showgrid=True, gridcolor=c["grid"], gridwidth=1, zeroline=False,
         showline=False, tickfont_color=c["muted"], title_font_color=c["muted"],
     )
+    # Only style the title when one exists — a title_font on a titleless
+    # figure makes plotly render the literal string "undefined"
+    if fig.layout.title and fig.layout.title.text:
+        fig.update_layout(title_font=dict(size=15, color=c["ink"]))
     if height:
         fig.update_layout(height=height)
     return fig
