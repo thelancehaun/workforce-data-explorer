@@ -33,7 +33,9 @@ def _get_v4(agency: str, endpoint: str, params: dict) -> pd.DataFrame:
         raise ValueError(REGISTER_MSG)
 
     url = f"{DOL_API_BASE}/get/{agency}/{endpoint}/json"
-    resp = requests.get(url, params=params, headers={"X-API-KEY": key}, timeout=60)
+    # DOL v4 accepts the key only as a query parameter (a 401 comes back if
+    # it's sent as an X-API-KEY header)
+    resp = requests.get(url, params={**params, "X-API-KEY": key}, timeout=60)
     resp.raise_for_status()
     data = resp.json()
     records = data.get("data", data) if isinstance(data, dict) else data
