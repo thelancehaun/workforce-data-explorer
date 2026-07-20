@@ -32,9 +32,11 @@ Answer questions using your tools. Be concise. When you fetch data:
 - Note the data source and recency
 - If the user asks to chart or visualize something, say so and it will be rendered automatically
 
-Available data: BLS employment/wages/JOLTS, FRED macro series, Census ACS state/county data,
-O*NET occupation skills/tasks, DOL enforcement, SEC workforce filings, Indeed Hiring Lab
-daily job postings (national/state/sector/metro) and AI-postings share.
+Available data: BLS employment/wages/JOLTS, FRED macro series (incl. ADP weekly payrolls),
+Census ACS state/county data, O*NET occupation skills/tasks, DOL enforcement, SEC workforce
+filings, Indeed Hiring Lab daily job postings (national/state/sector/metro), AI-postings
+share, AI-usage exposure by occupation (Anthropic Economic Index), and one-call state
+labor market snapshots.
 
 For "right now" questions about hiring/labor demand, get_job_postings is the timeliest signal
 (daily, ~1 week lag). For AI hiring trends use get_ai_postings_share.

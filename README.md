@@ -1,7 +1,9 @@
 # Workforce Data Explorer
 
-One interface for 78 curated US workforce and labor market data sources — 26
-with live API access across BLS, FRED, Census, O*NET, DOL, and SEC EDGAR.
+One interface for 89 curated US workforce and labor market data sources — 30
+with live API access spanning official statistics (BLS, FRED, Census, O*NET,
+DOL, SEC EDGAR) and real-time signals (Indeed Hiring Lab job postings, ADP
+payrolls, the Anthropic Economic Index).
 
 **Three ways to use it, easiest first:**
 
@@ -21,6 +23,9 @@ with live API access across BLS, FRED, Census, O*NET, DOL, and SEC EDGAR.
 | **O*NET** | 900+ occupation profiles — skills, tasks, abilities, technology used |
 | **DOL** | Weekly UI claims, OSHA inspections, wage & hour enforcement |
 | **SEC EDGAR** | Layoff 8-Ks, human capital disclosures from 10-Ks, filings by company |
+| **Indeed Hiring Lab** | Daily job postings indexes (national/state/metro/sector) + AI-postings share |
+| **ADP** | Weekly and monthly private payrolls (via FRED) |
+| **Anthropic Economic Index** | Real-world AI usage by occupation and task |
 
 ---
 
@@ -28,8 +33,10 @@ with live API access across BLS, FRED, Census, O*NET, DOL, and SEC EDGAR.
 
 **[workforce-data-explorer.streamlit.app](https://workforce-data-explorer.streamlit.app)** — nothing to install.
 
-- **Catalog** — search all 78 curated sources by topic
-- **FRED / BLS / O*NET / DOL / SEC pages** — fetch, chart, and download any series as CSV
+- **Catalog** — search all 89 curated sources by topic
+- **Job Postings** — real-time labor demand from Indeed, incl. AI's share of postings
+- **State Labor Markets** — the four headline indicators for any state
+- **FRED / BLS / Census / O*NET / DOL / SEC pages** — fetch, chart, and download any series as CSV
 - **AI Assistant** — ask questions in plain English ("show me quits vs. openings
   since 2022"). The shared assistant allows a few questions per minute; paste
   your own free [Groq key](https://console.groq.com/keys) into the expander on
@@ -38,9 +45,10 @@ with live API access across BLS, FRED, Census, O*NET, DOL, and SEC EDGAR.
 ## 🤖 The AI connector (MCP)
 
 The best experience: plug live labor data into the AI you already use. The
-connector exposes 11 tools — FRED series, BLS series, occupation wages, Census
-ACS, O*NET occupations, UI claims, and SEC layoff/company filings — and your
-AI decides which to call.
+connector exposes 15 tools — FRED and BLS series, occupation wages, Census
+ACS, O*NET occupations, UI claims, SEC layoff/company filings, Indeed daily
+job postings, AI-postings share, state labor market snapshots, and AI-usage
+exposure by occupation — and your AI decides which to call.
 
 **Claude (claude.ai)** — requires a paid plan:
 
@@ -116,10 +124,10 @@ app.py                    Streamlit dashboard (Overview, AI Assistant, data page
 ui_theme.py               Shared chart styling (validated palette, light/dark)
 mcp_server.py             MCP server (stdio + streamable HTTP, TTL-cached tools)
 workforce_data/
-  catalog.py              Searchable metadata for 78 curated sources
+  catalog.py              Searchable metadata for 89 curated sources
   chat.py                 Tool-calling chat engine (Groq) + shared tool layer
   sources/
-    fred.py bls.py census.py onet.py dol.py sec.py
+    fred.py bls.py census.py onet.py dol.py sec.py indeed.py aei.py
 ```
 
 Fetched data is cached in memory in both apps (1 hour for time series, up to a
