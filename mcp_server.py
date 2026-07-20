@@ -281,6 +281,22 @@ def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
     return impl.get_ai_postings_share(start_date=start_date)
 
 
+# ── State labor markets ───────────────────────────────────────────────────────
+
+@mcp.tool()
+@_ttl_cache(HOUR)
+def get_state_labor_market(state: str) -> str:
+    """One-call snapshot of a US state's labor market: unemployment rate,
+    nonfarm payrolls, weekly UI claims (via FRED), and JOLTS job openings and
+    quits (via BLS) — each with latest and year-ago values.
+
+    Args:
+        state: 2-letter state abbreviation (e.g. 'TX', 'CA').
+    """
+    impl.clear_stored_dfs()
+    return impl.get_state_labor_market(state)
+
+
 # ── DOL ───────────────────────────────────────────────────────────────────────
 
 @mcp.tool()

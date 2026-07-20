@@ -70,6 +70,9 @@ SERIES_MAP = {
     "nonfarm business productivity": "OPHNFB",
     "unit labor costs": "ULCNFB",
     "multifactor productivity": "MFPNBS",
+    # ADP National Employment Report (private payrolls, hosted in FRED)
+    "adp private payrolls weekly": "ADPWNUSNERSA",
+    "adp private payrolls monthly": "ADPMNUSNERSA",
     # UI claims
     "initial claims": "ICSA",
     "continued claims": "CCSA",

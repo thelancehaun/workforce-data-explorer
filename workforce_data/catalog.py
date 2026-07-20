@@ -770,10 +770,11 @@ SOURCES = [
         "topics": ["employment", "wages", "pay", "job switchers", "stayers", "private sector"],
         "geography": ["national"],
         "frequency": "monthly",
-        "connector": "external",
+        "connector": "fred",
         "url": "https://adpemploymentreport.com/",
         "free": True,
-        "key_required": False,
+        "key_required": True,
+        "notes": "Monthly and weekly private payrolls served through FRED (series ADPMNUSNERSA / ADPWNUSNERSA).",
     },
     {
         "id": "revelio_rpls",

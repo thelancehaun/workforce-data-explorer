@@ -207,19 +207,7 @@ def fetch_ai_share(start_date: str):
     return indeed_connector.get_ai_postings_share(start_date=start_date)
 
 
-US_STATES = {
-    "Alabama": "01", "Alaska": "02", "Arizona": "04", "Arkansas": "05", "California": "06",
-    "Colorado": "08", "Connecticut": "09", "Delaware": "10", "District of Columbia": "11",
-    "Florida": "12", "Georgia": "13", "Hawaii": "15", "Idaho": "16", "Illinois": "17",
-    "Indiana": "18", "Iowa": "19", "Kansas": "20", "Kentucky": "21", "Louisiana": "22",
-    "Maine": "23", "Maryland": "24", "Massachusetts": "25", "Michigan": "26", "Minnesota": "27",
-    "Mississippi": "28", "Missouri": "29", "Montana": "30", "Nebraska": "31", "Nevada": "32",
-    "New Hampshire": "33", "New Jersey": "34", "New Mexico": "35", "New York": "36",
-    "North Carolina": "37", "North Dakota": "38", "Ohio": "39", "Oklahoma": "40", "Oregon": "41",
-    "Pennsylvania": "42", "Rhode Island": "44", "South Carolina": "45", "South Dakota": "46",
-    "Tennessee": "47", "Texas": "48", "Utah": "49", "Vermont": "50", "Virginia": "51",
-    "Washington": "53", "West Virginia": "54", "Wisconsin": "55", "Wyoming": "56",
-}
+from workforce_data.us_states import NAME_TO_ABBREV, NAME_TO_FIPS as US_STATES
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -847,6 +835,76 @@ def render_postings():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Page: State Labor Markets
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_states():
+    st.header("State Labor Markets")
+    st.markdown("The four headline labor indicators for any state — unemployment, payrolls, claims, and JOLTS flows.")
+
+    from datetime import timedelta
+    state_name = st.selectbox("State", list(NAME_TO_ABBREV), index=list(NAME_TO_ABBREV).index("Texas"))
+    ab = NAME_TO_ABBREV[state_name]
+    start = (date.today() - timedelta(days=730)).isoformat()
+
+    try:
+        ur = fetch_fred_series(f"{ab}UR", start)
+        payrolls = fetch_fred_series(f"{ab}NA", start)
+        claims = fetch_fred_series(f"{ab}ICLAIMS", start)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            latest, yr = ur["value"].iloc[-1], ur["value"].iloc[max(0, len(ur) - 13)]
+            st.metric("Unemployment rate", f"{latest:.1f}%", f"{latest - yr:+.1f}pp vs year ago",
+                      delta_color="inverse")
+        with c2:
+            chg = payrolls["value"].iloc[-1] - payrolls["value"].iloc[max(0, len(payrolls) - 13)]
+            st.metric("Payrolls, year change", f"{chg:+,.1f}K")
+        with c3:
+            latest, yr = claims["value"].iloc[-1], claims["value"].iloc[max(0, len(claims) - 53)]
+            st.metric("Weekly UI claims", f"{latest:,.0f}", f"{latest - yr:+,.0f} vs year ago",
+                      delta_color="inverse")
+
+        g1, g2 = st.columns(2)
+        with g1:
+            st.plotly_chart(ui_theme.line(ur, x="date", y="value", height=300,
+                                          title=f"Unemployment rate — {state_name} (%)"),
+                            use_container_width=True)
+            st.plotly_chart(ui_theme.line(claims, x="date", y="value", height=300,
+                                          title=f"Weekly initial UI claims — {state_name}"),
+                            use_container_width=True)
+        with g2:
+            st.plotly_chart(ui_theme.line(payrolls, x="date", y="value", height=300,
+                                          title=f"Nonfarm payrolls — {state_name} (thousands)"),
+                            use_container_width=True)
+            fips = US_STATES[state_name]
+            jolts = fetch_bls_series(
+                (f"JTS000000{fips}0000000JOL", f"JTS000000{fips}0000000QUL"),
+                date.today().year - 2, date.today().year,
+            )
+            if not jolts.empty:
+                jolts = jolts.copy()
+                jolts["series"] = jolts["series_id"].map({
+                    f"JTS000000{fips}0000000JOL": "Job openings",
+                    f"JTS000000{fips}0000000QUL": "Quits",
+                })
+                st.plotly_chart(ui_theme.line(jolts, x="date", y="value", color="series", height=300,
+                                              title=f"JOLTS — {state_name} (thousands)"),
+                                use_container_width=True)
+
+        combined = ur.assign(series="unemployment_rate")
+        st.download_button("Download CSV (all four series)",
+                           pd.concat([
+                               ur.assign(series="unemployment_rate_pct"),
+                               payrolls.assign(series="nonfarm_payrolls_thousands"),
+                               claims.assign(series="weekly_initial_claims"),
+                           ]).to_csv(index=False),
+                           file_name=f"state_labor_{ab}.csv", mime="text/csv")
+    except Exception as e:
+        st.error(str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Page: Census
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1381,6 +1439,7 @@ pg = st.navigation({
         st.Page(render_postings, title="Job Postings", icon="🔥", url_path="postings"),
         st.Page(render_fred, title="FRED Time Series", icon="📈", url_path="fred"),
         st.Page(render_bls, title="BLS Series", icon="🏭", url_path="bls"),
+        st.Page(render_states, title="State Labor Markets", icon="📍", url_path="states"),
         st.Page(render_census, title="Census", icon="🗺️", url_path="census"),
         st.Page(render_onet, title="O*NET Occupations", icon="🧰", url_path="occupations"),
         st.Page(render_dol, title="DOL Enforcement", icon="⚖️", url_path="dol"),

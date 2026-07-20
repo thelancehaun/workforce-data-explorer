@@ -187,6 +187,20 @@ TOOL_DEFS = [
     {
         "type": "function",
         "function": {
+            "name": "get_state_labor_market",
+            "description": "One-call snapshot of a US state's labor market: unemployment rate, nonfarm payrolls, weekly UI claims, and JOLTS openings/quits, each with latest and year-ago values.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "state": {"type": "string", "description": "2-letter state abbreviation (e.g. 'TX')"},
+                },
+                "required": ["state"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "get_ui_claims_data",
             "description": "Fetch weekly unemployment insurance initial claims data (seasonally adjusted). One of the most timely labor market indicators, updated weekly.",
             "parameters": {
@@ -436,6 +450,55 @@ def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
         return json.dumps({"error": str(e)})
 
 
+def get_state_labor_market(state: str) -> str:
+    from .sources.bls import get_series as bls_get_series
+    from .sources.fred import get_series as fred_get_series
+    from .us_states import ABBREV_TO_FIPS, ABBREV_TO_NAME
+    from datetime import date, timedelta
+
+    ab = state.strip().upper()
+    if ab not in ABBREV_TO_FIPS:
+        return json.dumps({"error": f"Unknown state '{state}'. Use a 2-letter abbreviation like TX."})
+    name = ABBREV_TO_NAME[ab]
+    start = (date.today() - timedelta(days=730)).isoformat()
+    out: dict[str, Any] = {"state": name}
+
+    for suffix, key, label, chart in [
+        ("UR", "unemployment_rate_pct", f"Unemployment rate — {name}", True),
+        ("NA", "nonfarm_payrolls_thousands", f"Nonfarm payrolls — {name}", False),
+        ("ICLAIMS", "weekly_initial_claims", f"Weekly initial UI claims — {name}", False),
+    ]:
+        try:
+            df = fred_get_series(f"{ab}{suffix}", start_date=start)
+            latest, prev_yr = df.iloc[-1], df.iloc[max(0, len(df) - 13)]
+            out[key] = {
+                "latest": float(latest["value"]),
+                "as_of": f"{latest['date']:%Y-%m-%d}",
+                "year_ago": float(prev_yr["value"]),
+            }
+            if chart:
+                _store_df(f"state_{ab}_{suffix}", df, label, "line")
+        except Exception as e:
+            out[key] = {"error": str(e)}
+
+    try:
+        fips = ABBREV_TO_FIPS[ab]
+        jolts = bls_get_series(
+            [f"JTS000000{fips}0000000JOL", f"JTS000000{fips}0000000QUL"],
+            start_year=date.today().year - 2,
+        )
+        for sid, key in [(f"JTS000000{fips}0000000JOL", "job_openings_thousands"),
+                         (f"JTS000000{fips}0000000QUL", "quits_thousands")]:
+            sub = jolts[jolts["series_id"] == sid]
+            if not sub.empty:
+                out[key] = {"latest": float(sub["value"].iloc[-1]),
+                            "as_of": f"{sub['date'].iloc[-1]:%Y-%m}"}
+    except Exception as e:
+        out["jolts_error"] = str(e)
+
+    return json.dumps(out)
+
+
 def get_ui_claims_data(weeks: int = 104) -> str:
     from .sources.dol import get_bls_ui_claims
     try:
@@ -459,6 +522,7 @@ TOOL_MAP = {
     "get_ui_claims_data": get_ui_claims_data,
     "get_job_postings": get_job_postings,
     "get_ai_postings_share": get_ai_postings_share,
+    "get_state_labor_market": get_state_labor_market,
 }
 
 
