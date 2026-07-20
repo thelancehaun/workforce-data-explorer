@@ -1,0 +1,20 @@
+services:
+  # Remote MCP server — add https://<service-url>/mcp as a custom connector
+  # in claude.ai (Settings → Connectors) or any MCP-capable client.
+  - type: web
+    name: workforce-data-mcp
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python mcp_server.py --http
+    envVars:
+      - key: FRED_API_KEY
+        sync: false
+      - key: BLS_API_KEY
+        sync: false
+      - key: CENSUS_API_KEY
+        sync: false
+      - key: ONET_API_KEY
+        sync: false
+      - key: DOL_API_KEY
+        sync: false
