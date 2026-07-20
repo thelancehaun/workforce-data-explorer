@@ -70,10 +70,13 @@ AI decides which to call.
 
 ## ⚙️ Run it yourself
 
+Requires **Python 3.10+** (tested on 3.13). All dependencies are in
+`requirements.txt`.
+
 ```bash
 git clone https://github.com/thelancehaun/workforce-data-explorer.git
 cd workforce-data-explorer
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env   # then add your free API keys (see below)
 
