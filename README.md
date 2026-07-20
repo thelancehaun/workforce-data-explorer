@@ -112,16 +112,18 @@ need free ones.
 ## Architecture
 
 ```
-app.py                    Streamlit dashboard (8 pages)
-mcp_server.py             MCP server (stdio + streamable HTTP)
+app.py                    Streamlit dashboard (Overview, AI Assistant, data pages)
+ui_theme.py               Shared chart styling (validated palette, light/dark)
+mcp_server.py             MCP server (stdio + streamable HTTP, TTL-cached tools)
 workforce_data/
   catalog.py              Searchable metadata for 78 curated sources
-  client.py               Unified get(source_id) dispatcher
-  cache.py                DuckDB response cache with per-frequency TTLs
   chat.py                 Tool-calling chat engine (Groq) + shared tool layer
   sources/
     fred.py bls.py census.py onet.py dol.py sec.py
 ```
+
+Fetched data is cached in memory in both apps (1 hour for time series, up to a
+day for searches and metadata), so repeat queries don't burn API quota.
 
 ## License
 

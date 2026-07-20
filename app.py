@@ -19,8 +19,12 @@ load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 
 import ui_theme
-from workforce_data import catalog, cache
+from workforce_data import catalog
+from workforce_data.sources import bls as bls_connector
+from workforce_data.sources import dol as dol_connector
 from workforce_data.sources import fred as fred_connector
+from workforce_data.sources import onet as onet_connector
+from workforce_data.sources import sec as sec_connector
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -52,6 +56,103 @@ with st.sidebar:
         st.caption("All free — see the About page for signup links.")
 
 
+# ── Cached data access ────────────────────────────────────────────────────────
+# One process serves every visitor, so st.cache_data turns repeat queries into
+# instant, API-quota-free responses. TTLs track how often the source updates.
+
+HOUR, DAY = 3600, 86400
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_fred_topic(topic: str, start_date: str, end_date: str):
+    return fred_connector.get_by_topic(topic, start_date=start_date, end_date=end_date)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_fred_series(series_id: str, start_date: str):
+    return fred_connector.get_series(series_id, start_date=start_date)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_fred_info(series_id: str) -> dict:
+    return fred_connector.get_series_info(series_id)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def search_fred_series(query: str, limit: int = 25):
+    return fred_connector.search_series(query, limit=limit)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_bls_popular(name: str, start_year: int, end_year: int):
+    return bls_connector.get_popular(name, start_year=start_year, end_year=end_year)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_bls_series(series_ids: tuple, start_year: int, end_year: int):
+    return bls_connector.get_series(list(series_ids), start_year=start_year, end_year=end_year)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_oews(soc_code: str, data_type: str, start_year: int):
+    return bls_connector.get_oews_occupation(soc_code, data_type=data_type, start_year=start_year)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def search_onet(query: str):
+    return onet_connector.search_occupations(query, end=30)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_onet_detail(data_type: str, occ_code: str):
+    fn_map = {
+        "skills": onet_connector.get_skills,
+        "tasks": onet_connector.get_tasks,
+        "abilities": onet_connector.get_abilities,
+        "knowledge": onet_connector.get_knowledge,
+        "work_activities": onet_connector.get_work_activities,
+        "technology": onet_connector.get_technology,
+    }
+    return fn_map[data_type](occ_code)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_onet_list(kind: str):
+    if kind == "bright":
+        return onet_connector.get_bright_outlook_occupations()
+    return onet_connector.get_green_occupations()
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_ui_claims(weeks: int):
+    return dol_connector.get_bls_ui_claims(weeks=weeks)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_osha(state, start_date: str, end_date: str):
+    return dol_connector.get_osha_inspections(state=state, start_date=start_date, end_date=end_date)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_whd(state):
+    return dol_connector.get_whd_enforcement(state=state)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_sec_filings(query: str, form_type: str, start_date: str, limit: int):
+    return sec_connector.search_filings(query, form_type=form_type, date_range_start=start_date, limit=limit)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_layoff_8k(start_date: str, end_date: str):
+    return sec_connector.search_layoff_8k(date_range_start=start_date, date_range_end=end_date)
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def fetch_company_filings(company: str, form_type: str):
+    return sec_connector.search_company_filings(company, form_type=form_type)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Page: Overview
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -63,11 +164,10 @@ SAMPLE_QUESTIONS = [
 ]
 
 
-@st.cache_data(ttl=3600, show_spinner=False)
 def _overview_series(series_id: str) -> pd.DataFrame:
     from datetime import timedelta
     start = (date.today() - timedelta(days=730)).isoformat()
-    return fred_connector.get_series(series_id, start_date=start)
+    return fetch_fred_series(series_id, start_date=start)
 
 
 def _sparkline(df: pd.DataFrame):
@@ -244,12 +344,8 @@ def render_fred():
             freq_map = {"Monthly": "m", "Quarterly": "q", "Annual": "a", "(source frequency)": None}
             with st.spinner(f"Fetching '{selected_topic}'…"):
                 try:
-                    df, series_id = fred_connector.get_by_topic(
-                        selected_topic,
-                        start_date=str(start_date),
-                        end_date=str(end_date),
-                    )
-                    info = fred_connector.get_series_info(series_id)
+                    df, series_id = fetch_fred_topic(selected_topic, str(start_date), str(end_date))
+                    info = fetch_fred_info(series_id)
                     _render_timeseries(df, info, series_id)
                 except Exception as e:
                     st.error(f"{e}")
@@ -265,7 +361,7 @@ def render_fred():
         if search_btn and search_q:
             with st.spinner("Searching…"):
                 try:
-                    results = fred_connector.search_series(search_q, limit=25)
+                    results = search_fred_series(search_q, limit=25)
                     if results.empty:
                         st.info("No results.")
                     else:
@@ -291,8 +387,8 @@ def render_fred():
             with st.spinner(f"Fetching {manual_id.upper()}…"):
                 try:
                     sid = manual_id.strip().upper()
-                    df = fred_connector.get_series(sid, start_date=str(manual_start))
-                    info = fred_connector.get_series_info(sid)
+                    df = fetch_fred_series(sid, start_date=str(manual_start))
+                    info = fetch_fred_info(sid)
                     _render_timeseries(df, info, sid)
                 except Exception as e:
                     st.error(str(e))
@@ -351,8 +447,6 @@ def render_bls():
     st.header("BLS Series")
     st.markdown("Bureau of Labor Statistics data — JOLTS, OEWS occupation wages, ECI, productivity, and more.")
 
-    from workforce_data.sources import bls as bls_connector
-
     tab1, tab2, tab3 = st.tabs(["Popular Series", "Custom Series IDs", "OEWS Occupation Wages"])
 
     with tab1:
@@ -371,7 +465,7 @@ def render_bls():
         if fetch and selected:
             with st.spinner(f"Fetching {selected}…"):
                 try:
-                    df = bls_connector.get_popular(selected, start_year=int(sy), end_year=int(ey))
+                    df = fetch_bls_popular(selected, int(sy), int(ey))
                     _render_bls_df(df, selected)
                 except Exception as e:
                     st.error(str(e))
@@ -393,7 +487,7 @@ def render_bls():
             ids = [s.strip().upper() for s in ids_input.split(",") if s.strip()]
             with st.spinner(f"Fetching {len(ids)} series…"):
                 try:
-                    df = bls_connector.get_series(ids, start_year=int(sy2), end_year=int(ey2))
+                    df = fetch_bls_series(tuple(ids), int(sy2), int(ey2))
                     _render_bls_df(df, ", ".join(ids))
                 except Exception as e:
                     st.error(str(e))
@@ -415,7 +509,7 @@ def render_bls():
         if oews_fetch and soc:
             with st.spinner(f"Fetching OEWS for SOC {soc}…"):
                 try:
-                    df = bls_connector.get_oews_occupation(soc.strip(), data_type=metric_code, start_year=int(oews_sy))
+                    df = fetch_oews(soc.strip(), metric_code, int(oews_sy))
                     _render_bls_df(df, f"OEWS — SOC {soc} — {oews_metric}")
                 except Exception as e:
                     st.error(str(e))
@@ -452,8 +546,6 @@ def render_onet():
     st.header("O*NET Occupations")
     st.markdown("Explore 923 occupations — skills, tasks, abilities, knowledge, work activities, and technology used.")
 
-    from workforce_data.sources import onet as onet_connector
-
     col1, col2 = st.columns([4, 1])
     with col1:
         search_term = st.text_input("Search occupations", placeholder='e.g. "software developer", "registered nurse", "data scientist"')
@@ -464,7 +556,7 @@ def render_onet():
     if search_btn and search_term:
         with st.spinner("Searching O*NET…"):
             try:
-                results = onet_connector.search_occupations(search_term, end=30)
+                results = search_onet(search_term)
                 if results.empty:
                     st.info("No occupations found.")
                 else:
@@ -501,15 +593,7 @@ def render_onet():
             if load_btn:
                 with st.spinner(f"Loading {data_type} for {occ_code}…"):
                     try:
-                        fn_map = {
-                            "skills": onet_connector.get_skills,
-                            "tasks": onet_connector.get_tasks,
-                            "abilities": onet_connector.get_abilities,
-                            "knowledge": onet_connector.get_knowledge,
-                            "work_activities": onet_connector.get_work_activities,
-                            "technology": onet_connector.get_technology,
-                        }
-                        df = fn_map[data_type](occ_code)
+                        df = fetch_onet_detail(data_type, occ_code)
 
                         if df.empty:
                             st.info("No data returned for this occupation/data type.")
@@ -544,7 +628,7 @@ def render_onet():
         if st.button("Load Bright Outlook Occupations", use_container_width=True):
             with st.spinner("Loading…"):
                 try:
-                    df = onet_connector.get_bright_outlook_occupations()
+                    df = fetch_onet_list("bright")
                     st.success(f"{len(df)} Bright Outlook occupations")
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 except Exception as e:
@@ -553,7 +637,7 @@ def render_onet():
         if st.button("Load Green Economy Occupations", use_container_width=True):
             with st.spinner("Loading…"):
                 try:
-                    df = onet_connector.get_green_occupations()
+                    df = fetch_onet_list("green")
                     st.success(f"{len(df)} Green Economy occupations")
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 except Exception as e:
@@ -581,10 +665,9 @@ def render_dol():
             fetch = st.button("Fetch UI Claims", type="primary", use_container_width=True)
 
         if fetch:
-            from workforce_data.sources import dol as dol_connector
             with st.spinner("Fetching from FRED…"):
                 try:
-                    df = dol_connector.get_bls_ui_claims(weeks=weeks)
+                    df = fetch_ui_claims(weeks)
                     if df.empty:
                         st.warning("No data returned. Check that FRED_API_KEY is set in .env")
                     else:
@@ -614,14 +697,9 @@ def render_dol():
             osha_fetch = st.button("Fetch", type="primary", key="osha_fetch", use_container_width=True)
 
         if osha_fetch:
-            from workforce_data.sources import dol as dol_connector
             with st.spinner("Fetching OSHA inspections…"):
                 try:
-                    df = dol_connector.get_osha_inspections(
-                        state=state.upper() if state else None,
-                        start_date=str(osha_start),
-                        end_date=str(osha_end),
-                    )
+                    df = fetch_osha(state.upper() if state else None, str(osha_start), str(osha_end))
                     if df.empty:
                         st.info("No data returned via API. Download bulk data directly at [osha.gov/data](https://www.osha.gov/data)")
                     else:
@@ -642,10 +720,9 @@ def render_dol():
             whd_fetch = st.button("Fetch WHD Data", type="primary", key="whd_fetch", use_container_width=True)
 
         if whd_fetch:
-            from workforce_data.sources import dol as dol_connector
             with st.spinner("Fetching WHD enforcement data…"):
                 try:
-                    df = dol_connector.get_whd_enforcement(state=whd_state.upper() if whd_state else None)
+                    df = fetch_whd(whd_state.upper() if whd_state else None)
                     if df.empty:
                         st.info("No data returned via API. Access directly at [enforcedata.dol.gov](https://enforcedata.dol.gov)")
                     else:
@@ -666,7 +743,6 @@ def render_dol():
             h1b_fetch = st.button("Fetch H-1B Data", type="primary", key="h1b_fetch", use_container_width=True)
 
         if h1b_fetch:
-            from workforce_data.sources import dol as dol_connector
             with st.spinner(f"Fetching H-1B data for FY{h1b_year}…"):
                 try:
                     df = dol_connector.get_h1b_disclosures(year=h1b_year)
@@ -688,8 +764,6 @@ def render_sec():
     st.header("SEC EDGAR Filings")
     st.markdown("Search public company filings for human capital disclosures, executive compensation, and layoff announcements.")
 
-    from workforce_data.sources import sec as sec_connector
-
     tab1, tab2, tab3 = st.tabs(["Human Capital (10-K)", "Layoff Announcements (8-K)", "Company Search"])
 
     with tab1:
@@ -707,7 +781,7 @@ def render_sec():
         if hc_fetch:
             with st.spinner("Searching EDGAR…"):
                 try:
-                    df = sec_connector.search_filings(hc_query, form_type="10-K", date_range_start=str(hc_start), limit=50)
+                    df = fetch_sec_filings(hc_query, "10-K", str(hc_start), 50)
                     if df.empty:
                         st.info("No results. Try adjusting keywords or date range.")
                     else:
@@ -731,7 +805,7 @@ def render_sec():
         if lay_fetch:
             with st.spinner("Searching EDGAR for layoff filings…"):
                 try:
-                    df = sec_connector.search_layoff_8k(date_range_start=str(lay_start), date_range_end=str(lay_end))
+                    df = fetch_layoff_8k(str(lay_start), str(lay_end))
                     if df.empty:
                         st.info("No results found.")
                     else:
@@ -754,7 +828,7 @@ def render_sec():
         if co_fetch and company_name:
             with st.spinner(f"Searching for {company_name}…"):
                 try:
-                    df = sec_connector.search_company_filings(company_name, form_type=form_type)
+                    df = fetch_company_filings(company_name, form_type)
                     if df.empty:
                         st.info("No results. Check spelling or try a shorter name.")
                     else:
@@ -765,64 +839,46 @@ def render_sec():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Page: Cache & Settings
+# Page: About & Settings
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def render_cache():
-    st.header("Cache & Settings")
+def render_settings():
+    st.header("About & Settings")
 
-    tab1, tab2 = st.tabs(["Cache Status", "API Keys"])
+    st.markdown(f"""
+    **Workforce Data Explorer** puts {len(catalog.SOURCES)} curated US labor market
+    data sources behind one interface — this dashboard, plus an
+    [MCP connector]({GITHUB_URL}#-the-ai-connector-mcp) that plugs the same live
+    data into Claude or ChatGPT: `{MCP_URL}`
 
-    with tab1:
-        st.subheader("Local Cache")
-        st.markdown("Fetched data is cached in `~/.workforce_data_cache/` to avoid redundant API calls.")
+    MIT-licensed and open source: [github.com/thelancehaun/workforce-data-explorer]({GITHUB_URL}).
+    Data comes from FRED, BLS, Census, O*NET, DOL, and SEC EDGAR — credit for
+    everything here belongs to the statistical agencies that publish it.
+    """)
 
-        stats = cache.stats()
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Active entries", stats["active_entries"])
-        c2.metric("Expired entries", stats["expired_entries"])
-        c3.metric("Cache size", f"{stats['db_size_mb']} MB")
-        c4.metric("Total entries", stats["total_entries"])
+    st.subheader("API keys")
+    st.markdown("""
+    Running your own copy? Add keys to a `.env` file (copy `.env.example`) —
+    all free:
 
-        if not stats["by_source"].empty:
-            st.markdown("**Cached data by source:**")
-            st.dataframe(stats["by_source"], use_container_width=True, hide_index=True)
+    | Service | Why you need it | Get key |
+    |---------|----------------|-------------------|
+    | **FRED** | Powers most macro time series | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
+    | **BLS** | Higher rate limits for BLS series | [data.bls.gov](https://data.bls.gov/registrationEngine/) |
+    | **Census Bureau** | ACS, QWI, CBP queries | [api.census.gov](https://api.census.gov/data/key_signup.html) |
+    | **DOL** | OSHA / Wage & Hour enforcement | [dataportal.dol.gov](https://dataportal.dol.gov) |
+    | **Groq** | The AI Assistant chat | [console.groq.com](https://console.groq.com) |
+    | **O*NET** | Optional — higher rate limits | [services.onetcenter.org](https://services.onetcenter.org/) |
+    """)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("Clear Entire Cache", type="secondary", use_container_width=True):
-                n = cache.clear()
-                st.success(f"Cleared {n} cache entries.")
-        with col2:
-            src_clear = st.text_input("Clear specific source ID", placeholder="e.g. bls_jolts")
-            if st.button("Clear Source", use_container_width=True) and src_clear:
-                n = cache.clear(src_clear)
-                st.success(f"Cleared {n} entries for '{src_clear}'.")
-
-    with tab2:
-        st.subheader("API Key Setup")
-        st.markdown("""
-        Add keys to a `.env` file in the project root (copy from `.env.example`).
-
-        | Service | Why you need it | Get key (all free) |
-        |---------|----------------|-------------------|
-        | **FRED** | Powers most macro time series | [fred.stlouisfed.org](https://fred.stlouisfed.org/docs/api/api_key.html) |
-        | **BLS** | Higher rate limits for BLS series | [data.bls.gov](https://data.bls.gov/registrationEngine/) |
-        | **Census Bureau** | ACS, QWI, CBP queries | [api.census.gov](https://api.census.gov/data/key_signup.html) |
-        | **O*NET** | Higher rate limits | [services.onetcenter.org](https://services.onetcenter.org/) |
-
-        All four can be obtained in under 5 minutes total.
-        """)
-
-        env_path = Path(__file__).parent / ".env"
-        if env_path.exists():
-            st.markdown("**Current `.env` (values masked):**")
-            with open(env_path) as f:
-                env_content = f.read()
-            masked = re.sub(r"(=[^#\n]{4,})", lambda m: "=****" if m.group(1).strip("= ") not in ("", "your_fred_api_key_here", "your_bls_api_key_here", "your_census_api_key_here") else m.group(1), env_content)
-            st.code(masked, language="bash")
-        else:
-            st.info(f"No `.env` file found. Copy `.env.example` to `.env` and fill in your keys.")
+    st.subheader("Data cache")
+    st.caption(
+        "Fetched data is cached in memory (1 hour for time series, up to a day "
+        "for searches and metadata) so repeat queries don't hit the source APIs."
+    )
+    if st.button("Clear data cache"):
+        st.cache_data.clear()
+        st.success("Cache cleared — the next fetch of each series will be fresh.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1009,7 +1065,7 @@ pg = st.navigation({
         st.Page(render_sec, title="SEC Filings", icon="🏛️", url_path="sec"),
     ],
     "Reference": [
-        st.Page(render_cache, title="Cache & Settings", icon="⚙️", url_path="settings"),
+        st.Page(render_settings, title="About & Settings", icon="⚙️", url_path="settings"),
     ],
 })
 pg.run()

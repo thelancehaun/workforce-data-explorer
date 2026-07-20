@@ -23,9 +23,12 @@ Claude Desktop config (~/Library/Application Support/Claude/claude_desktop_confi
 """
 
 import argparse
+import functools
 import json
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -54,10 +57,43 @@ Tips:
 
 mcp = FastMCP("workforce-data", instructions=INSTRUCTIONS)
 
+# ── TTL result cache ──────────────────────────────────────────────────────────
+# Tool results are plain strings; repeat questions across MCP clients shouldn't
+# re-hit the source APIs. TTLs track how often each source updates.
+
+HOUR, DAY = 3600, 86400
+_cache: dict = {}
+_cache_lock = threading.Lock()
+_CACHE_MAX = 256
+
+
+def _ttl_cache(seconds: int):
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            key = (fn.__name__, args, tuple(sorted(kwargs.items())))
+            now = time.time()
+            with _cache_lock:
+                hit = _cache.get(key)
+                if hit and hit[0] > now:
+                    return hit[1]
+            result = fn(*args, **kwargs)
+            with _cache_lock:
+                if len(_cache) >= _CACHE_MAX:
+                    for k in [k for k, v in _cache.items() if v[0] <= now]:
+                        _cache.pop(k, None)
+                    while len(_cache) >= _CACHE_MAX:
+                        _cache.pop(next(iter(_cache)))
+                _cache[key] = (now + seconds, result)
+            return result
+        return wrapper
+    return deco
+
 
 # ── Catalog ───────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(DAY)
 def search_catalog(query: str) -> str:
     """Search a curated catalog of 78 workforce data sources by topic or keyword.
 
@@ -71,6 +107,7 @@ def search_catalog(query: str) -> str:
 # ── FRED ──────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(HOUR)
 def get_fred_data(
     topic_or_series_id: str,
     start_date: str = "2015-01-01",
@@ -102,6 +139,7 @@ def get_fred_data(
 
 
 @mcp.tool()
+@_ttl_cache(DAY)
 def search_fred(query: str) -> str:
     """Search FRED for time series matching a keyword query. Use when
     get_fred_data doesn't find the right series — returns series IDs, titles,
@@ -113,6 +151,7 @@ def search_fred(query: str) -> str:
 # ── BLS ───────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(HOUR)
 def get_bls_data(series_names: str, start_year: int = 2015, end_year: int = 0) -> str:
     """Fetch official BLS series by name, straight from the Bureau of Labor
     Statistics API. Available series: ces_total_nonfarm, ces_private,
@@ -133,6 +172,7 @@ def get_bls_data(series_names: str, start_year: int = 2015, end_year: int = 0) -
 
 
 @mcp.tool()
+@_ttl_cache(HOUR)
 def get_occupation_wages(soc_code: str) -> str:
     """Get national mean annual wage, mean hourly wage, and employment for a
     specific occupation from BLS OEWS (latest survey year).
@@ -161,6 +201,7 @@ def get_occupation_wages(soc_code: str) -> str:
 # ── Census ────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(DAY)
 def get_census_data(variables: str, geography: str = "state", year: int = 2023) -> str:
     """Fetch Census ACS data for employment, income, commuting, education, and
     demographics — by state, county, or nationally. Variables: employed,
@@ -181,6 +222,7 @@ def get_census_data(variables: str, geography: str = "state", year: int = 2023) 
 # ── O*NET ─────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(DAY)
 def search_onet_occupations(query: str) -> str:
     """Search O*NET's database of 900+ occupations by job title or description.
     Returns occupation codes and titles — pass a code to get_onet_details or
@@ -190,6 +232,7 @@ def search_onet_occupations(query: str) -> str:
 
 
 @mcp.tool()
+@_ttl_cache(DAY)
 def get_onet_details(occupation_code: str, data_type: str = "skills") -> str:
     """Get detailed O*NET data for an occupation: its skills, daily tasks,
     abilities, knowledge areas, work activities, or technology used.
@@ -206,6 +249,7 @@ def get_onet_details(occupation_code: str, data_type: str = "skills") -> str:
 # ── DOL ───────────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(HOUR)
 def get_ui_claims(weeks: int = 104) -> str:
     """Fetch weekly US unemployment insurance initial claims (seasonally
     adjusted) — one of the most timely labor market indicators, updated weekly.
@@ -219,6 +263,7 @@ def get_ui_claims(weeks: int = 104) -> str:
 # ── SEC EDGAR ─────────────────────────────────────────────────────────────────
 
 @mcp.tool()
+@_ttl_cache(1800)
 def search_layoff_filings(start_date: str = "", end_date: str = "", limit: int = 25) -> str:
     """Search SEC EDGAR for 8-K filings disclosing layoffs and workforce
     reductions at public companies. Returns company names, filing dates, and
@@ -244,6 +289,7 @@ def search_layoff_filings(start_date: str = "", end_date: str = "", limit: int =
 
 
 @mcp.tool()
+@_ttl_cache(1800)
 def search_company_filings(company_name: str, form_type: str = "10-K", limit: int = 10) -> str:
     """Search SEC EDGAR for a public company's filings — annual reports (10-K),
     quarterlies (10-Q), current reports (8-K), or proxy statements (DEF 14A).
