@@ -33,7 +33,11 @@ Answer questions using your tools. Be concise. When you fetch data:
 - If the user asks to chart or visualize something, say so and it will be rendered automatically
 
 Available data: BLS employment/wages/JOLTS, FRED macro series, Census ACS state/county data,
-O*NET occupation skills/tasks, DOL enforcement, SEC workforce filings.
+O*NET occupation skills/tasks, DOL enforcement, SEC workforce filings, Indeed Hiring Lab
+daily job postings (national/state/sector/metro) and AI-postings share.
+
+For "right now" questions about hiring/labor demand, get_job_postings is the timeliest signal
+(daily, ~1 week lag). For AI hiring trends use get_ai_postings_share.
 
 IMPORTANT — never say data is unavailable without trying these steps first:
 1. Call get_fred_data with the topic or a likely FRED series ID
@@ -147,6 +151,36 @@ TOOL_DEFS = [
                     "year": {"type": "integer", "description": "ACS survey year (default 2023)"},
                 },
                 "required": ["variables"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_job_postings",
+            "description": "Fetch the Indeed Hiring Lab job postings index (daily, % change vs Feb 2020 baseline) — the most timely read on labor demand. geo='national' for the US trend; 'state' (optionally filter='TX') for state trends or a latest-snapshot ranking; 'sector' (optionally filter='Software Development') for occupational sectors; 'metro' (filter='Seattle') for metro areas.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "geo": {"type": "string", "description": "One of: national, state, sector, metro"},
+                    "filter": {"type": "string", "description": "Optional: state abbreviation, sector name, or metro name to filter to"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (default 2022-01-01)"},
+                },
+                "required": ["geo"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_ai_postings_share",
+            "description": "Share of US job postings mentioning AI terms over time (Indeed Hiring Lab AI tracker, 7-day average). The most direct measure of AI demand in hiring.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD (default 2023-01-01)"},
+                },
+                "required": [],
             },
         },
     },
@@ -344,6 +378,64 @@ def get_census_data(variables: str, geography: str = "state", year: int = 2023) 
         return json.dumps({"error": str(e), "available_variables": list(list_acs_variables().keys())})
 
 
+def get_job_postings(geo: str = "national", filter: str = "", start_date: str = "2022-01-01") -> str:
+    from .sources import indeed
+    f = (filter or "").strip()
+    try:
+        if geo == "state":
+            df = indeed.get_state_postings(state=f or None, start_date=start_date)
+            if f:
+                label = f"Indeed Job Postings Index — {f.upper()}"
+                _store_df(f"indeed_state_{f.lower()}", df, label, "line")
+            else:
+                latest = df[df["date"] == df["date"].max()].sort_values("postings_index", ascending=False)
+                label = f"Indeed Job Postings Index by state — {df['date'].max():%b %d, %Y}"
+                _store_df("indeed_states_latest", latest[["state", "postings_index"]], label, "bar")
+                df = latest
+        elif geo == "sector":
+            df = indeed.get_sector_postings(sector=f or None, start_date=start_date)
+            if f:
+                label = f"Indeed Job Postings Index — {f}"
+                _store_df(f"indeed_sector", df, label, "line")
+            else:
+                latest = df[df["date"] == df["date"].max()].sort_values("postings_index", ascending=False)
+                label = f"Indeed Job Postings Index by sector — {df['date'].max():%b %d, %Y}"
+                _store_df("indeed_sectors_latest", latest[["sector", "postings_index"]], label, "bar")
+                df = latest
+        elif geo == "metro":
+            if not f:
+                return json.dumps({"error": "metro requires a filter (e.g. 'Seattle')"})
+            df = indeed.get_metro_postings(metro=f, start_date=start_date)
+            label = f"Indeed Job Postings Index — {f} metro"
+            _store_df("indeed_metro", df, label, "line")
+        else:
+            df = indeed.get_national_postings(start_date=start_date)
+            label = "Indeed Job Postings Index — US"
+            _store_df("indeed_national", df, label, "line")
+        if df.empty:
+            return json.dumps({"error": f"No postings data for geo={geo} filter='{f}'."})
+        summary = _df_summary(df, label)
+        summary["note"] = "Index: 100 = Feb 1, 2020 pre-pandemic baseline. Source: Indeed Hiring Lab (CC-BY-4.0)."
+        return json.dumps(summary)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
+def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
+    from .sources import indeed
+    try:
+        df = indeed.get_ai_postings_share(start_date=start_date)
+        if df.empty:
+            return json.dumps({"error": "No AI tracker data returned."})
+        label = "Share of US job postings mentioning AI (%)"
+        _store_df("indeed_ai_share", df, label, "line")
+        summary = _df_summary(df, label)
+        summary["note"] = "7-day trailing average. Source: Indeed Hiring Lab AI tracker (CC-BY-4.0)."
+        return json.dumps(summary)
+    except Exception as e:
+        return json.dumps({"error": str(e)})
+
+
 def get_ui_claims_data(weeks: int = 104) -> str:
     from .sources.dol import get_bls_ui_claims
     try:
@@ -365,6 +457,8 @@ TOOL_MAP = {
     "get_onet_details": get_onet_details,
     "get_census_data": get_census_data,
     "get_ui_claims_data": get_ui_claims_data,
+    "get_job_postings": get_job_postings,
+    "get_ai_postings_share": get_ai_postings_share,
 }
 
 

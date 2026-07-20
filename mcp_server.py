@@ -246,6 +246,41 @@ def get_onet_details(occupation_code: str, data_type: str = "skills") -> str:
     return impl.get_onet_details(occupation_code, data_type=data_type)
 
 
+# ── Indeed Hiring Lab ─────────────────────────────────────────────────────────
+
+@mcp.tool()
+@_ttl_cache(HOUR)
+def get_job_postings(geo: str = "national", filter: str = "", start_date: str = "2022-01-01") -> str:
+    """Fetch the Indeed Hiring Lab job postings index — the most timely read on
+    US labor demand (daily data, about a one-week lag, indexed to 100 = the
+    Feb 1, 2020 pre-pandemic baseline). Source: Indeed Hiring Lab, CC-BY-4.0.
+
+    Args:
+        geo: One of: national, state, sector, metro.
+        filter: Optional focus — a state abbreviation ('TX'), sector name
+            ('Software Development'), or metro name ('Seattle'). With
+            geo='state' or 'sector' and no filter, returns the latest
+            cross-sectional ranking instead of a time series.
+        start_date: YYYY-MM-DD (default 2022-01-01).
+    """
+    impl.clear_stored_dfs()
+    return impl.get_job_postings(geo=geo, filter=filter, start_date=start_date)
+
+
+@mcp.tool()
+@_ttl_cache(HOUR)
+def get_ai_postings_share(start_date: str = "2023-01-01") -> str:
+    """Share of US job postings mentioning AI terms over time (7-day trailing
+    average) — the most direct measure of AI demand in hiring. From the Indeed
+    Hiring Lab AI tracker (CC-BY-4.0), monthly refresh.
+
+    Args:
+        start_date: YYYY-MM-DD (default 2023-01-01).
+    """
+    impl.clear_stored_dfs()
+    return impl.get_ai_postings_share(start_date=start_date)
+
+
 # ── DOL ───────────────────────────────────────────────────────────────────────
 
 @mcp.tool()

@@ -24,6 +24,7 @@ from workforce_data.sources import bls as bls_connector
 from workforce_data.sources import census as census_connector
 from workforce_data.sources import dol as dol_connector
 from workforce_data.sources import fred as fred_connector
+from workforce_data.sources import indeed as indeed_connector
 from workforce_data.sources import onet as onet_connector
 from workforce_data.sources import sec as sec_connector
 
@@ -55,6 +56,9 @@ with st.sidebar:
             f"- {':green[●]' if os.getenv(v, '') else ':gray[○]'} {n}" for n, v in _keys
         ))
         st.caption("All free — see the About page for signup links.")
+
+
+LIVE_CONNECTORS = ("fred", "bls", "census", "onet", "dol", "sec", "indeed")
 
 
 # ── Cached data access ────────────────────────────────────────────────────────
@@ -171,6 +175,36 @@ def fetch_qwi(indicators: tuple, state_fips: str, year_start: int, year_end: int
 @st.cache_data(ttl=DAY, show_spinner=False)
 def fetch_cbp(year: int, geography: str):
     return census_connector.get_cbp(year=year, geography=geography)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_postings_national(start_date: str, new_postings: bool = False):
+    return indeed_connector.get_national_postings(start_date=start_date, new_postings=new_postings)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_postings_states(start_date: str):
+    return indeed_connector.get_state_postings(start_date=start_date)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_postings_sectors(start_date: str):
+    return indeed_connector.get_sector_postings(start_date=start_date)
+
+
+@st.cache_data(ttl=HOUR, show_spinner=False)
+def fetch_postings_metro(metro: str, start_date: str):
+    return indeed_connector.get_metro_postings(metro=metro, start_date=start_date)
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_indeed_sectors() -> list:
+    return indeed_connector.list_sectors()
+
+
+@st.cache_data(ttl=DAY, show_spinner=False)
+def fetch_ai_share(start_date: str):
+    return indeed_connector.get_ai_postings_share(start_date=start_date)
 
 
 US_STATES = {
@@ -306,7 +340,7 @@ def render_catalog():
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Matching sources", len(results))
-    c2.metric("API-connected", sum(1 for r in results if r.get("connector") in ("fred", "bls", "census", "onet", "dol", "sec")))
+    c2.metric("API-connected", sum(1 for r in results if r.get("connector") in LIVE_CONNECTORS))
     c3.metric("Free to access", sum(1 for r in results if r.get("free")))
     c4.metric("Sections covered", len(set(r.get("section", "") for r in results)))
     st.divider()
@@ -327,7 +361,7 @@ def render_catalog():
 
 
 def _source_card(src: dict):
-    has_api = src.get("connector") in ("fred", "bls", "census", "onet", "dol", "sec")
+    has_api = src.get("connector") in LIVE_CONNECTORS
     topics = " · ".join(src.get("topics", [])[:6])
 
     col1, col2 = st.columns([5, 1])
@@ -683,6 +717,133 @@ def render_onet():
                     st.dataframe(df, use_container_width=True, hide_index=True)
                 except Exception as e:
                     st.error(str(e))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Page: Job Postings (Indeed Hiring Lab)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_postings():
+    st.header("Job Postings — Real-Time")
+    st.markdown(
+        "Daily job postings indexes from Indeed, about one week behind real time — "
+        "the timeliest public read on US labor demand. 100 = the pre-pandemic "
+        "baseline (Feb 1, 2020)."
+    )
+
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["National", "States", "Sectors", "Metros", "AI in Postings"])
+    default_start = "2022-01-01"
+
+    with tab1:
+        try:
+            df = fetch_postings_national(default_start)
+            latest = df.iloc[-1]
+            month_ago = df[df["date"] <= latest["date"] - pd.Timedelta(days=30)].iloc[-1]
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Postings index (SA)", f"{latest['postings_index_sa']:.1f}",
+                      f"{latest['postings_index_sa'] - month_ago['postings_index_sa']:+.1f} vs month ago")
+            c2.metric("vs pre-pandemic baseline", f"{latest['postings_index_sa'] - 100:+.1f}%")
+            c3.metric("Data through", f"{latest['date']:%b %d, %Y}")
+            fig = ui_theme.line(df, x="date", y="postings_index_sa",
+                                title="US job postings on Indeed (seasonally adjusted)",
+                                labels={"postings_index_sa": "Index (Feb 2020 = 100)", "date": ""})
+            st.plotly_chart(fig, use_container_width=True)
+            st.download_button("Download CSV", df.to_csv(index=False),
+                               file_name="indeed_postings_us.csv", mime="text/csv")
+        except Exception as e:
+            st.error(str(e))
+
+    with tab2:
+        try:
+            states_df = fetch_postings_states(default_start)
+            mode = st.radio("View", ["Latest snapshot (all states)", "Compare states over time"],
+                            horizontal=True, label_visibility="collapsed")
+            if mode.startswith("Latest"):
+                latest_date = states_df["date"].max()
+                snap = states_df[states_df["date"] == latest_date].sort_values("postings_index", ascending=False)
+                fig = ui_theme.bar(snap, x="postings_index", y="state", horizontal=True, height=1000,
+                                   title=f"Postings index by state — {latest_date:%b %d, %Y}",
+                                   labels={"postings_index": "Index (Feb 2020 = 100)", "state": ""})
+                fig.update_yaxes(autorange="reversed", showgrid=False)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                picks = st.multiselect("States", sorted(states_df["state"].unique()),
+                                       default=["TX", "CA", "NY", "FL"])
+                if picks:
+                    sel = states_df[states_df["state"].isin(picks)]
+                    fig = ui_theme.line(sel, x="date", y="postings_index", color="state",
+                                        title="Postings index by state",
+                                        labels={"postings_index": "Index (Feb 2020 = 100)", "date": ""})
+                    st.plotly_chart(fig, use_container_width=True)
+            st.download_button("Download CSV", states_df.to_csv(index=False),
+                               file_name="indeed_postings_states.csv", mime="text/csv")
+        except Exception as e:
+            st.error(str(e))
+
+    with tab3:
+        try:
+            sectors_df = fetch_postings_sectors(default_start)
+            mode = st.radio("View", ["Latest snapshot (all sectors)", "Compare sectors over time"],
+                            horizontal=True, label_visibility="collapsed", key="sector_mode")
+            if mode.startswith("Latest"):
+                latest_date = sectors_df["date"].max()
+                snap = sectors_df[sectors_df["date"] == latest_date].sort_values("postings_index", ascending=False)
+                fig = ui_theme.bar(snap, x="postings_index", y="sector", horizontal=True, height=900,
+                                   title=f"Postings index by sector — {latest_date:%b %d, %Y}",
+                                   labels={"postings_index": "Index (Feb 2020 = 100)", "sector": ""})
+                fig.update_yaxes(autorange="reversed", showgrid=False)
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                picks = st.multiselect("Sectors", fetch_indeed_sectors(),
+                                       default=["Software Development", "Nursing", "Retail"])
+                if picks:
+                    sel = sectors_df[sectors_df["sector"].isin(picks)]
+                    fig = ui_theme.line(sel, x="date", y="postings_index", color="sector",
+                                        title="Postings index by sector",
+                                        labels={"postings_index": "Index (Feb 2020 = 100)", "date": ""})
+                    st.plotly_chart(fig, use_container_width=True)
+            st.download_button("Download CSV", sectors_df.to_csv(index=False),
+                               file_name="indeed_postings_sectors.csv", mime="text/csv")
+        except Exception as e:
+            st.error(str(e))
+
+    with tab4:
+        metro_q = st.text_input("Metro area", placeholder='e.g. "Seattle", "Columbus", "Miami"')
+        if metro_q:
+            try:
+                mdf = fetch_postings_metro(metro_q, default_start)
+                if mdf.empty:
+                    st.info("No metro matched — postings cover metro areas with 500k+ population.")
+                else:
+                    fig = ui_theme.line(mdf, x="date", y="postings_index", color="metro",
+                                        title=f"Postings index — metros matching '{metro_q}'",
+                                        labels={"postings_index": "Index (Feb 2020 = 100)", "date": ""})
+                    st.plotly_chart(fig, use_container_width=True)
+                    st.download_button("Download CSV", mdf.to_csv(index=False),
+                                       file_name="indeed_postings_metro.csv", mime="text/csv")
+            except Exception as e:
+                st.error(str(e))
+
+    with tab5:
+        st.caption("Share of US job postings mentioning AI terms — 7-day trailing average, updated monthly.")
+        try:
+            ai = fetch_ai_share("2019-01-01")
+            latest = ai.iloc[-1]
+            c1, c2 = st.columns(2)
+            c1.metric("AI share of postings", f"{latest['ai_share_pct']:.2f}%")
+            yr_ago = ai[ai["date"] <= latest["date"] - pd.Timedelta(days=365)].iloc[-1]
+            c2.metric("A year earlier", f"{yr_ago['ai_share_pct']:.2f}%",
+                      f"{latest['ai_share_pct'] - yr_ago['ai_share_pct']:+.2f}pp since")
+            fig = ui_theme.line(ai, x="date", y="ai_share_pct",
+                                title="Share of US job postings mentioning AI (%)",
+                                labels={"ai_share_pct": "% of postings", "date": ""})
+            st.plotly_chart(fig, use_container_width=True)
+            st.download_button("Download CSV", ai.to_csv(index=False),
+                               file_name="indeed_ai_share.csv", mime="text/csv")
+        except Exception as e:
+            st.error(str(e))
+
+    st.caption(f"{indeed_connector.ATTRIBUTION} — [github.com/hiring-lab](https://github.com/hiring-lab)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1217,6 +1378,7 @@ pg = st.navigation({
     "": [PAGE_OVERVIEW, PAGE_ASSISTANT],
     "Explore data": [
         st.Page(render_catalog, title="Catalog", icon="🗂️", url_path="catalog"),
+        st.Page(render_postings, title="Job Postings", icon="🔥", url_path="postings"),
         st.Page(render_fred, title="FRED Time Series", icon="📈", url_path="fred"),
         st.Page(render_bls, title="BLS Series", icon="🏭", url_path="bls"),
         st.Page(render_census, title="Census", icon="🗺️", url_path="census"),
