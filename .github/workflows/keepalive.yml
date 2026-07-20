@@ -1,0 +1,19 @@
+# Keeps the free-tier Render MCP server from spinning down (idle timeout ~15
+# min) so connector users never hit a 30-60s cold start. One always-on service
+# fits within Render's 750 free instance-hours/month.
+name: Keep MCP server awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://workforce-data-mcp.onrender.com/healthz)
+          echo "healthz -> HTTP $code"
+          test "$code" = "200"

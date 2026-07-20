@@ -90,6 +90,14 @@ def _ttl_cache(seconds: int):
     return deco
 
 
+# ── Health check (keep-alive pings + uptime monitoring) ───────────────────────
+
+@mcp.custom_route("/healthz", methods=["GET"])
+async def healthz(request):
+    from starlette.responses import PlainTextResponse
+    return PlainTextResponse("ok")
+
+
 # ── Catalog ───────────────────────────────────────────────────────────────────
 
 @mcp.tool()
