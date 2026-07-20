@@ -42,17 +42,12 @@ FILES = {
 
 
 def _download_file(url: str, dest: Path, max_attempts: int = 4) -> None:
-    """
-    Download a file robustly, validating against Content-Length.
-    Falls back to subprocess curl if requests keeps getting truncated.
-    """
-    import subprocess
-
+    """Download a file, validating against Content-Length, with retries."""
     expected_size = None
+    last_error: Exception | None = None
 
     for attempt in range(max_attempts):
         try:
-            # First get Content-Length via HEAD
             head = requests.head(url, timeout=15, allow_redirects=True)
             cl = head.headers.get("Content-Length")
             if cl:
@@ -64,28 +59,23 @@ def _download_file(url: str, dest: Path, max_attempts: int = 4) -> None:
                     for chunk in resp.iter_content(chunk_size=131072):
                         f.write(chunk)
 
-            # Validate size
             actual = dest.stat().st_size
             if expected_size and actual < expected_size * 0.95:
                 dest.unlink(missing_ok=True)
-                continue  # retry
+                last_error = RuntimeError(f"truncated download ({actual} of {expected_size} bytes)")
+                continue
 
-            return  # success
+            return
 
-        except Exception:
+        except Exception as e:
+            last_error = e
             dest.unlink(missing_ok=True)
 
-    # Final fallback: use curl which handles chunked encoding more robustly
-    result = subprocess.run(
-        ["curl", "-fsSL", "--retry", "3", "--retry-delay", "2", "-o", str(dest), url],
-        capture_output=True,
-        timeout=180,
+    raise RuntimeError(
+        f"Could not download O*NET data file after {max_attempts} attempts: {url} "
+        f"(last error: {last_error}). You can download it manually from "
+        f"onetcenter.org/database.html and place it at {dest}."
     )
-    if result.returncode != 0 or not dest.exists():
-        raise RuntimeError(
-            f"Failed to download {url} after {max_attempts} attempts + curl fallback.\n"
-            f"curl stderr: {result.stderr.decode()}"
-        )
 
 
 def _load_file(data_type: str, force_refresh: bool = False) -> pd.DataFrame:
@@ -266,10 +256,3 @@ def get_related_occupations(code: str, top_n: int = 10) -> pd.DataFrame:
     result = result.rename(columns={"Related O*NET-SOC Code": "related_code", "Relatedness Tier": "relatedness_tier"})
     result = result.merge(occs[["code", "title"]].rename(columns={"code": "related_code"}), on="related_code", how="left")
     return result[["related_code", "title", "relatedness_tier"]].reset_index(drop=True)
-
-
-def clear_cache() -> None:
-    """Delete locally cached O*NET flat files to force re-download."""
-    import shutil
-    if FLAT_FILE_CACHE.exists():
-        shutil.rmtree(FLAT_FILE_CACHE)

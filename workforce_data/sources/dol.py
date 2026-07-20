@@ -131,29 +131,3 @@ def get_bls_ui_claims(weeks: int = 52) -> pd.DataFrame:
         return df[["date", "initial_claims_thousands", "series"]]
     except Exception:
         return pd.DataFrame()
-
-
-def get_warn_notices(
-    state: Optional[str] = None,
-    limit: int = 500,
-) -> pd.DataFrame:
-    """
-    Fetch WARN Act layoff notices from DOL.
-    WARN notices are administered by states; this returns aggregated/available data.
-
-    Args:
-        state: 2-letter state abbreviation
-        limit: max records
-    """
-    # WARN notices are administered state-by-state; there is no federal WARN API.
-    # Returns an empty frame so callers can point users to state WARN sites.
-    return pd.DataFrame(columns=["state", "employer", "city", "employees_affected", "notice_date", "layoff_date"])
-
-
-def get_vets4212(year: int = 2023, limit: int = 500) -> pd.DataFrame:
-    """
-    Fetch VETS-4212 federal contractor veteran employment reports via the DOL
-    API v4 (requires free DOL_API_KEY).
-    Shows veteran hiring by federal contractor, industry, and location.
-    """
-    return _get_v4("vets", "4212", {"limit": limit})

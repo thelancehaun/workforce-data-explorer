@@ -13,7 +13,6 @@ import pandas as pd
 import requests
 
 EDGAR_BASE = "https://data.sec.gov"
-EDGAR_SEARCH = "https://efts.sec.gov/LATEST/search-index"
 FULL_TEXT_SEARCH = "https://efts.sec.gov/LATEST/search-index"
 
 HEADERS = {
@@ -128,22 +127,6 @@ def search_company_filings(
         return pd.DataFrame()
 
 
-def get_company_facts(cik: str) -> dict:
-    """
-    Fetch all financial facts for a company from EDGAR's structured data API.
-    CIK (Central Index Key) is the SEC's company identifier.
-
-    Example: Apple = CIK 0000320193
-    Returns nested dict with all reported financial data.
-    """
-    _rate_limit()
-    cik_padded = str(cik).lstrip("0").zfill(10)
-    url = f"{EDGAR_BASE}/api/xbrl/companyfacts/CIK{cik_padded}.json"
-    resp = requests.get(url, headers=HEADERS, timeout=20)
-    resp.raise_for_status()
-    return resp.json()
-
-
 def search_layoff_8k(
     date_range_start: Optional[str] = None,
     date_range_end: Optional[str] = None,
@@ -160,51 +143,3 @@ def search_layoff_8k(
         limit=limit,
         exact_phrase=True,
     )
-
-
-def get_human_capital_filings(
-    date_range_start: str = "2021-01-01",
-    date_range_end: Optional[str] = None,
-    limit: int = 50,
-) -> pd.DataFrame:
-    """
-    Fetch 10-K filings containing human capital disclosures (required since Nov 2020).
-    """
-    return search_filings(
-        query="human capital employees workforce diversity retention",
-        form_type="10-K",
-        date_range_start=date_range_start,
-        date_range_end=date_range_end,
-        limit=limit,
-    )
-
-
-def lookup_cik(company_name: str) -> Optional[str]:
-    """
-    Look up a company's CIK by name via EDGAR company search.
-    Returns the first matching CIK, or None if not found.
-    """
-    _rate_limit()
-    url = "https://www.sec.gov/cgi-bin/browse-edgar"
-    params = {
-        "company": company_name,
-        "CIK": "",
-        "type": "10-K",
-        "dateb": "",
-        "owner": "include",
-        "count": "5",
-        "search_text": "",
-        "action": "getcompany",
-        "output": "atom",
-    }
-    try:
-        resp = requests.get(url, params=params, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-        # Parse CIK from response
-        import re
-        match = re.search(r"CIK=(\d+)", resp.text)
-        if match:
-            return match.group(1)
-    except Exception:
-        pass
-    return None
