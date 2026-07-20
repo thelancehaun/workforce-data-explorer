@@ -763,14 +763,31 @@ def render_cache():
 # Page: AI Assistant
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Shared-key throttle: visitors on the hosted app share one Groq free-tier
+# quota, so cap questions per browser session. A visitor's own key bypasses it.
+CHAT_WINDOW_SECONDS = 60
+CHAT_MAX_PER_WINDOW = 4
+
+
 def render_chat():
+    import time
     import workforce_data.chat as chat_engine
 
     st.header("AI Assistant")
     st.caption("Ask natural language questions about labor market data. Powered by GPT-OSS 120B via Groq.")
 
-    if not os.getenv("GROQ_API_KEY", ""):
-        st.error("GROQ_API_KEY not set. Add it to your `.env` file.")
+    server_key = os.getenv("GROQ_API_KEY", "")
+    with st.expander("Use your own Groq API key — free, removes rate limits", expanded=not server_key):
+        st.caption(
+            "The shared assistant allows a few questions per minute. For unlimited use, "
+            "paste a free key from [console.groq.com](https://console.groq.com/keys). "
+            "It stays in your browser session and is never stored."
+        )
+        user_key = st.text_input("Groq API key", type="password", key="user_groq_key").strip()
+
+    api_key = user_key or server_key
+    if not api_key:
+        st.info("Add a free Groq API key above to enable the AI Assistant.")
         return
 
     # Initialize session state
@@ -812,6 +829,19 @@ def render_chat():
     user_input = st.chat_input("Ask anything: 'What's the current unemployment rate?' or 'Show me JOLTS job openings since 2020'")
 
     if user_input:
+        # Throttle only applies to the shared server key
+        if not user_key:
+            now = time.time()
+            recent = [t for t in st.session_state.get("chat_times", []) if now - t < CHAT_WINDOW_SECONDS]
+            if len(recent) >= CHAT_MAX_PER_WINDOW:
+                wait = int(CHAT_WINDOW_SECONDS - (now - recent[0])) + 1
+                st.warning(
+                    f"The shared assistant is limited to {CHAT_MAX_PER_WINDOW} questions per minute. "
+                    f"Try again in ~{wait}s — or add your own free Groq key above for unlimited use."
+                )
+                return
+            st.session_state.chat_times = recent + [now]
+
         # Show user message immediately
         st.session_state.chat_messages.append({"role": "user", "content": user_input})
         with st.chat_message("user"):
@@ -824,6 +854,7 @@ def render_chat():
                     reply, updated_history = chat_engine.chat(
                         st.session_state.chat_history,
                         user_input,
+                        api_key=api_key,
                     )
                     stored_dfs = chat_engine.get_stored_dfs()
                 except Exception as e:

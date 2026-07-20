@@ -439,18 +439,19 @@ def _create_with_retry(client, messages, **kwargs):
     raise last_err
 
 
-def chat(history: list[dict], user_message: str) -> tuple[str, list[dict]]:
+def chat(history: list[dict], user_message: str, api_key: Optional[str] = None) -> tuple[str, list[dict]]:
     """
     Send a message and get a response. Handles multi-step tool calls automatically.
 
     Args:
         history: List of {"role": "user"|"assistant", "content": str} dicts
         user_message: The new user message
+        api_key: Groq API key; falls back to the GROQ_API_KEY env var
 
     Returns:
         (assistant_reply_text, updated_history)
     """
-    api_key = os.getenv("GROQ_API_KEY", "")
+    api_key = api_key or os.getenv("GROQ_API_KEY", "")
     if not api_key:
         raise ValueError("GROQ_API_KEY not set in .env")
 
@@ -463,13 +464,11 @@ def chat(history: list[dict], user_message: str) -> tuple[str, list[dict]]:
     messages.extend(history[-(MAX_HISTORY_TURNS * 2):])
     messages.append({"role": "user", "content": user_message})
 
-    # Agentic loop — capped so a tool-happy model can't spin forever
+    # Agentic loop — capped so a tool-happy model can't spin forever.
+    # tool_choice stays "auto": forcing a call breaks questions that don't
+    # need data (Groq 400s when a forced model answers in text).
     for _round in range(8):
-        # "required" on first pass forces a tool call; subsequent passes use "auto"
-        # so the model can give a final text response after tool results come in
-        tc_policy = "required" if not any(m["role"] == "tool" for m in messages) else "auto"
-
-        response = _create_with_retry(client, messages, tools=TOOL_DEFS, tool_choice=tc_policy)
+        response = _create_with_retry(client, messages, tools=TOOL_DEFS, tool_choice="auto")
 
         msg = response.choices[0].message
 
