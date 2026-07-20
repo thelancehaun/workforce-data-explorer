@@ -1,0 +1,14 @@
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#fcfcfb"
+secondaryBackgroundColor = "#f3f2ee"
+textColor = "#0b0b0b"
+linkColor = "#1c5cab"
+borderColor = "#e1e0d9"
+baseRadius = "medium"
+showSidebarBorder = true
+chartCategoricalColors = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"]
+
+[browser]
+gatherUsageStats = false

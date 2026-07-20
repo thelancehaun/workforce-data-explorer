@@ -59,7 +59,7 @@ mcp = FastMCP("workforce-data", instructions=INSTRUCTIONS)
 
 @mcp.tool()
 def search_catalog(query: str) -> str:
-    """Search a curated catalog of 200+ workforce data sources by topic or keyword.
+    """Search a curated catalog of 78 workforce data sources by topic or keyword.
 
     Returns matching source names, providers, descriptions, and update frequency.
     Useful for discovering what data exists on a topic (e.g. 'remote work',

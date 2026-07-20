@@ -1,7 +1,7 @@
 # Workforce Data Explorer
 
-One interface for 200+ US workforce and labor market data sources — BLS, FRED,
-Census, O*NET, DOL, and SEC EDGAR.
+One interface for 78 curated US workforce and labor market data sources — 26
+with live API access across BLS, FRED, Census, O*NET, DOL, and SEC EDGAR.
 
 **Three ways to use it, easiest first:**
 
@@ -28,7 +28,7 @@ Census, O*NET, DOL, and SEC EDGAR.
 
 **[workforce-data-explorer.streamlit.app](https://workforce-data-explorer.streamlit.app)** — nothing to install.
 
-- **Catalog** — search all 200+ sources by topic
+- **Catalog** — search all 78 curated sources by topic
 - **FRED / BLS / O*NET / DOL / SEC pages** — fetch, chart, and download any series as CSV
 - **AI Assistant** — ask questions in plain English ("show me quits vs. openings
   since 2022"). The shared assistant allows a few questions per minute; paste
@@ -115,7 +115,7 @@ need free ones.
 app.py                    Streamlit dashboard (8 pages)
 mcp_server.py             MCP server (stdio + streamable HTTP)
 workforce_data/
-  catalog.py              Searchable metadata for 200+ sources
+  catalog.py              Searchable metadata for 78 curated sources
   client.py               Unified get(source_id) dispatcher
   cache.py                DuckDB response cache with per-frequency TTLs
   chat.py                 Tool-calling chat engine (Groq) + shared tool layer

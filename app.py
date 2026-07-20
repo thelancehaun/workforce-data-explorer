@@ -18,6 +18,7 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 sys.path.insert(0, str(Path(__file__).parent))
 
+import ui_theme
 from workforce_data import catalog, cache
 from workforce_data.sources import fred as fred_connector
 
@@ -30,21 +31,13 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
-<style>
-.badge {
-    display: inline-block; padding: 2px 8px; border-radius: 12px;
-    font-size: 11px; font-weight: 600; margin-right: 4px;
-}
-</style>
-""", unsafe_allow_html=True)
-
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 
 with st.sidebar:
     st.title("Workforce Data Explorer")
-    st.caption("Access 200+ workforce datasets from one interface")
+    _n_live = sum(1 for s in catalog.SOURCES if s.get("connector") != "external")
+    st.caption(f"{len(catalog.SOURCES)} curated data sources — {_n_live} with live API access")
     st.divider()
 
     page = st.radio(
@@ -78,7 +71,7 @@ with st.sidebar:
 
 def render_catalog():
     st.header("Data Catalog")
-    st.markdown(f"**{len(catalog.SOURCES)} sources** — US federal statistics, academic datasets, private-sector releases, and international databases.")
+    st.markdown(f"**{len(catalog.SOURCES)} curated sources** — US federal statistics, academic datasets, private-sector releases, and international databases.")
 
     col1, col2, col3 = st.columns([3, 1.2, 1.2])
     with col1:
@@ -115,7 +108,8 @@ def render_catalog():
         by_section.setdefault(r.get("section", "Other"), []).append(r)
 
     for section_name, sources in by_section.items():
-        with st.expander(f"**{section_name}** — {len(sources)} sources", expanded=len(by_section) == 1):
+        n = len(sources)
+        with st.expander(f"**{section_name}** — {n} source{'s' if n != 1 else ''}", expanded=len(by_section) == 1):
             for src in sources:
                 _source_card(src)
 
@@ -248,11 +242,7 @@ def _render_timeseries(df: pd.DataFrame, info: dict, series_id: str):
     chart_tab, table_tab, notes_tab = st.tabs(["Chart", "Table", "Series Notes"])
 
     with chart_tab:
-        fig = px.line(df, x="date", y="value", labels={"value": units, "date": ""}, title=title)
-        fig.update_traces(line_color="#1f77b4", line_width=2)
-        fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified", margin=dict(t=40, b=10))
-        fig.update_xaxes(showgrid=True, gridcolor="#f0f0f0")
-        fig.update_yaxes(showgrid=True, gridcolor="#f0f0f0")
+        fig = ui_theme.line(df, x="date", y="value", title=title, labels={"value": units, "date": ""})
         st.plotly_chart(fig, use_container_width=True)
 
     with table_tab:
@@ -363,10 +353,9 @@ def _render_bls_df(df: pd.DataFrame, label: str):
 
     if "date" in df.columns and "value" in df.columns:
         if "series_id" in df.columns and df["series_id"].nunique() > 1:
-            fig = px.line(df, x="date", y="value", color="series_id", title=label)
+            fig = ui_theme.line(df, x="date", y="value", color="series_id", title=label)
         else:
-            fig = px.line(df, x="date", y="value", title=label)
-        fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified")
+            fig = ui_theme.line(df, x="date", y="value", title=label)
         st.plotly_chart(fig, use_container_width=True)
 
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -454,10 +443,12 @@ def render_onet():
                                     top, x="importance_value", y="name", orientation="h",
                                     title=f"Top {data_type.replace('_', ' ').title()} by Importance — {occ_code}",
                                     labels={"importance_value": "Importance Score", "name": ""},
-                                    color="importance_value", color_continuous_scale="Blues",
+                                    color="importance_value",
+                                    color_continuous_scale=ui_theme.SEQ_BLUE,
                                 )
-                                fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", showlegend=False)
-                                fig.update_yaxes(autorange="reversed")
+                                ui_theme.style_fig(fig, hovermode="closest")
+                                fig.update_layout(coloraxis_showscale=False)
+                                fig.update_yaxes(autorange="reversed", showgrid=False)
                                 st.plotly_chart(fig, use_container_width=True)
 
                             st.dataframe(df, use_container_width=True, hide_index=True)
@@ -521,13 +512,11 @@ def render_dol():
                         st.warning("No data returned. Check that FRED_API_KEY is set in .env")
                     else:
                         st.success(f"{len(df):,} weekly observations")
-                        fig = px.line(
+                        fig = ui_theme.line(
                             df, x="date", y="initial_claims_thousands",
                             title="Weekly Initial Unemployment Insurance Claims (Seasonally Adjusted, Thousands)",
                             labels={"initial_claims_thousands": "Claims (thousands)", "date": ""},
                         )
-                        fig.update_traces(line_color="#e45756")
-                        fig.update_layout(plot_bgcolor="white", paper_bgcolor="white", hovermode="x unified")
                         st.plotly_chart(fig, use_container_width=True)
                         st.download_button("Download CSV", df.to_csv(index=False), file_name=f"ui_claims_{date.today()}.csv", mime="text/csv")
                 except Exception as e:
@@ -817,13 +806,13 @@ def render_chat():
                     if chart_type == "line" and "date" in df.columns:
                         y_col = _chart_y_col(df)
                         if y_col:
-                            fig = px.line(df, x="date", y=y_col, title=label)
+                            fig = ui_theme.line(df, x="date", y=y_col, title=label)
                             st.plotly_chart(fig, use_container_width=True)
                     elif chart_type == "bar":
                         y_col = _chart_y_col(df)
                         cat_cols = df.select_dtypes(exclude="number").columns.tolist()
                         if y_col and cat_cols:
-                            fig = px.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
+                            fig = ui_theme.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
                             st.plotly_chart(fig, use_container_width=True)
                     st.download_button(
                         f"Download {label[:30]}… CSV" if len(label) > 30 else f"Download {label} CSV",
@@ -885,13 +874,13 @@ def render_chat():
                 if chart_type == "line" and "date" in df.columns:
                     y_col = _chart_y_col(df)
                     if y_col:
-                        fig = px.line(df, x="date", y=y_col, title=label)
+                        fig = ui_theme.line(df, x="date", y=y_col, title=label)
                         st.plotly_chart(fig, use_container_width=True)
                 elif chart_type == "bar":
                     y_col = _chart_y_col(df)
                     cat_cols = df.select_dtypes(exclude="number").columns.tolist()
                     if y_col and cat_cols:
-                        fig = px.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
+                        fig = ui_theme.bar(df.head(20), x=cat_cols[0], y=y_col, title=label)
                         st.plotly_chart(fig, use_container_width=True)
                 elif chart_type is None:
                     st.dataframe(df.head(30), use_container_width=True, hide_index=True)
