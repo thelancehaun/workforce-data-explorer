@@ -144,7 +144,7 @@ TOOL_DEFS = [
                 "properties": {
                     "variables": {"type": "string", "description": "Comma-separated variable names (e.g. 'employed,median_household_income')"},
                     "geography": {"type": "string", "description": "One of: national, state, county"},
-                    "year": {"type": "integer", "description": "ACS survey year (default 2022)"},
+                    "year": {"type": "integer", "description": "ACS survey year (default 2023)"},
                 },
                 "required": ["variables"],
             },
@@ -328,7 +328,7 @@ def get_onet_details(occupation_code: str, data_type: str = "skills") -> str:
         return json.dumps({"error": str(e)})
 
 
-def get_census_data(variables: str, geography: str = "state", year: int = 2022) -> str:
+def get_census_data(variables: str, geography: str = "state", year: int = 2023) -> str:
     from .sources.census import get_acs, list_acs_variables
     var_list = [v.strip() for v in variables.split(",")]
     dataset = "acs/acs5" if geography == "county" else "acs/acs1"
@@ -369,8 +369,20 @@ TOOL_MAP = {
 
 
 # ── DataFrame store ───────────────────────────────────────────────────────────
+# Thread-local: one Python process serves many Streamlit sessions (and many MCP
+# requests), so a module-global dict would let concurrent users see each
+# other's data. Tool calls run synchronously on the caller's thread, so
+# thread-local isolation is sufficient.
 
-_df_store: dict[str, dict] = {}
+import threading
+
+_df_local = threading.local()
+
+
+def _store() -> dict[str, dict]:
+    if not hasattr(_df_local, "store"):
+        _df_local.store = {}
+    return _df_local.store
 
 
 def _df_summary(df: pd.DataFrame, label: str = "") -> dict:
@@ -402,15 +414,15 @@ def _df_summary(df: pd.DataFrame, label: str = "") -> dict:
 
 
 def _store_df(key: str, df: pd.DataFrame, label: str, chart_type: Optional[str]):
-    _df_store[key] = {"df": df, "label": label, "chart_type": chart_type}
+    _store()[key] = {"df": df, "label": label, "chart_type": chart_type}
 
 
 def get_stored_dfs() -> dict:
-    return _df_store
+    return _store()
 
 
 def clear_stored_dfs():
-    _df_store.clear()
+    _store().clear()
 
 
 # ── Chat ──────────────────────────────────────────────────────────────────────
@@ -439,7 +451,7 @@ def _create_with_retry(client, messages, **kwargs):
     raise last_err
 
 
-def chat(history: list[dict], user_message: str, api_key: Optional[str] = None) -> tuple[str, list[dict]]:
+def chat(history: list[dict], user_message: str, api_key: Optional[str] = None) -> tuple[str, list[dict], dict]:
     """
     Send a message and get a response. Handles multi-step tool calls automatically.
 
@@ -449,7 +461,8 @@ def chat(history: list[dict], user_message: str, api_key: Optional[str] = None) 
         api_key: Groq API key; falls back to the GROQ_API_KEY env var
 
     Returns:
-        (assistant_reply_text, updated_history)
+        (assistant_reply_text, updated_history, dataframes) where dataframes
+        maps store keys to {"df", "label", "chart_type"} for chart rendering
     """
     api_key = api_key or os.getenv("GROQ_API_KEY", "")
     if not api_key:
@@ -525,4 +538,4 @@ def chat(history: list[dict], user_message: str, api_key: Optional[str] = None) 
         if m["role"] in ("user", "assistant") and m.get("content")
     ]
 
-    return reply.strip(), updated_history
+    return reply.strip(), updated_history, dict(get_stored_dfs())

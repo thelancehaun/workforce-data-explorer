@@ -929,12 +929,11 @@ def render_chat():
         with st.chat_message("assistant"):
             with st.spinner("Thinking…"):
                 try:
-                    reply, updated_history = chat_engine.chat(
+                    reply, updated_history, stored_dfs = chat_engine.chat(
                         st.session_state.chat_history,
                         user_input,
                         api_key=api_key,
                     )
-                    stored_dfs = chat_engine.get_stored_dfs()
                 except Exception as e:
                     reply = f"Error: {e}"
                     updated_history = st.session_state.chat_history

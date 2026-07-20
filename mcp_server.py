@@ -92,6 +92,9 @@ def get_fred_data(
             summary stats and recent rows. Use when charting or analyzing the
             full series.
     """
+    # Clear this thread's frame store first: worker threads are pooled, and
+    # _append_full_data grabs the most recent stored frame
+    impl.clear_stored_dfs()
     result = impl.get_fred_data(topic_or_series_id, start_date=start_date, end_date=end_date)
     if full_data:
         result = _append_full_data(result)
