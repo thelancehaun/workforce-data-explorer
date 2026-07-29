@@ -8,6 +8,10 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python mcp_server.py --http
     envVars:
+      # Match the locally-tested interpreter; without this Render defaults to
+      # the newest Python (3.14 as of July 2026), untested for this app.
+      - key: PYTHON_VERSION
+        value: 3.13.13
       - key: FRED_API_KEY
         sync: false
       - key: BLS_API_KEY

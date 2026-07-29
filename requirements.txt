@@ -1,7 +1,10 @@
-streamlit>=1.46.0
-pandas>=2.0.0
-requests>=2.31.0
-plotly>=5.18.0
-python-dotenv>=1.0.0
-groq>=0.11.0
-mcp>=1.9.0
+# Pinned to the locally-verified working set (Python 3.13). The 2026-07-29
+# outage came from an unpinned rebuild pulling mcp 2.0 (breaking API changes)
+# — keep these exact until an upgrade is tested deliberately.
+streamlit==1.56.0
+pandas==3.0.2
+requests==2.33.1
+plotly==6.6.0
+python-dotenv==1.2.2
+groq==1.1.2
+mcp==1.28.1

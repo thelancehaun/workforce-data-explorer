@@ -13,7 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Ping health endpoint
+        # GitHub throttles this cron to every 1-3h in practice, so most pings
+        # hit a sleeping instance. A cold boot takes 45-75s and can outlive a
+        # single request at Render's proxy — retry for up to ~4 minutes so a
+        # slow wake still counts (and actually wakes the server).
         run: |
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 90 https://workforce-data-mcp.onrender.com/healthz)
-          echo "healthz -> HTTP $code"
-          test "$code" = "200"
+          for i in 1 2 3 4; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://workforce-data-mcp.onrender.com/healthz || echo 000)
+            echo "attempt $i: healthz -> HTTP $code"
+            test "$code" = "200" && exit 0
+          done
+          exit 1
