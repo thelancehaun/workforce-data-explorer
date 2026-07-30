@@ -59,6 +59,12 @@ exposure by occupation — and your AI decides which to call.
 
 **ChatGPT** — Settings → Connectors (developer mode) → add the same URL.
 
+> 📍 **The connector URL changed** (July 2026). If you added it earlier as
+> `workforce-data-mcp.onrender.com/mcp`, that address still responds for now
+> but is deprecated and slower (it sleeps between uses). Point your connector
+> at `https://workforcemcp.beaconturn.com/mcp` — the new home is always on,
+> and the URL is permanent.
+
 **Claude Desktop app, running locally** — the easy way is the extension bundle:
 
 1. Clone the repo and create the venv (see [Run it yourself](#️-run-it-yourself)).

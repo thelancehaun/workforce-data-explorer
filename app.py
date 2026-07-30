@@ -41,7 +41,7 @@ st.set_page_config(
 
 # ── Sidebar (navigation renders itself via st.navigation at the bottom) ───────
 
-MCP_URL = "https://workforce-data-mcp.onrender.com/mcp"
+MCP_URL = "https://workforcemcp.beaconturn.com/mcp"
 GITHUB_URL = "https://github.com/thelancehaun/workforce-data-explorer"
 
 with st.sidebar:
