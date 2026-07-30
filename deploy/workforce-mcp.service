@@ -1,0 +1,19 @@
+[Unit]
+Description=Workforce Data MCP server (streamable HTTP behind Caddy)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=mcp
+Group=mcp
+WorkingDirectory=/opt/workforce-mcp
+EnvironmentFile=/etc/workforce-mcp.env
+ExecStart=/opt/workforce-mcp/.venv/bin/python mcp_server.py --http --host 127.0.0.1 --port 8080
+Restart=always
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
