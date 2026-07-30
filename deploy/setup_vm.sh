@@ -9,6 +9,15 @@ set -euo pipefail
 REPO=https://github.com/thelancehaun/workforce-data-explorer.git
 APPDIR=/opt/workforce-mcp
 
+echo "== Swap (needed on 1GB micro instances so pip install doesn't OOM)"
+if [ "$(free -m | awk '/^Mem:/{print $2}')" -lt 2048 ] && [ ! -f /swapfile ]; then
+  sudo fallocate -l 2G /swapfile && sudo chmod 600 /swapfile
+  sudo mkswap /swapfile > /dev/null && sudo swapon /swapfile
+  echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab > /dev/null
+fi
+
+sudo apt-get update -q > /dev/null
+
 echo "== Instance firewall: allow 80/443 (Oracle Ubuntu images block all but 22)"
 # Insert before the platform REJECT rule; keep Oracle's iSCSI rules untouched.
 REJECT_LINE=$(sudo iptables -L INPUT --line-numbers | awk '/REJECT/{print $1; exit}')
