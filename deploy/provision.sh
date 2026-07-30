@@ -67,7 +67,7 @@ if [ -z "$INST" ] || [ "$INST" = "null" ]; then
   for AD in $($OCI iam availability-domain list --query "data[].name | join(' ', @)" --raw-output); do
     echo "-- trying $AD"
     INST=$($OCI compute instance launch -c "$TEN" --availability-domain "$AD" \
-      --shape VM.Standard.A1.Flex --shape-config '{"ocpus":1,"memoryInGBs":6}' \
+      --shape VM.Standard.A1.Flex --shape-config '{"ocpus":2,"memoryInGBs":12}' \
       --image-id "$IMG" --subnet-id "$SUB" --assign-public-ip true \
       --display-name workforce-mcp --ssh-authorized-keys-file "$PUBKEY" \
       --wait-for-state RUNNING --query data.id --raw-output 2>/tmp/oci_launch_err.txt) && break

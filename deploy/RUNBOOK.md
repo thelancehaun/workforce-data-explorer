@@ -15,8 +15,8 @@ Internet ──HTTPS──▶ Caddy (ports 80/443, auto-TLS via Let's Encrypt)
               (systemd service, non-root user, auto-restart)
 ```
 
-- VM: Ampere A1, 1 OCPU / 6 GB, Ubuntu 24.04 (within the 2 OCPU / 12 GB
-  Always Free allowance)
+- VM: Ampere A1, 2 OCPU / 12 GB, Ubuntu 24.04 (the full Always Free
+  allowance — sized for hosting multiple MCP servers side by side)
 - The MCP app binds 127.0.0.1 only — never exposed directly. Caddy is the only
   thing on the public ports and terminates TLS. (`--host` already exists in
   mcp_server.py; no code change needed.)
