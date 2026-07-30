@@ -1,7 +1,7 @@
 # Oracle VM deployment — runbook
 
 Goal: the hosted MCP server moves to an always-on Oracle Always Free VM at
-`https://mcp.beaconturn.com/mcp`. No sleeping, no cold starts, no keep-alive,
+`https://workforcemcp.beaconturn.com/mcp`. No sleeping, no cold starts, no keep-alive,
 $0/month. Render stays untouched until the new server is verified, so there is
 no moment where the public URL is broken.
 
@@ -61,10 +61,10 @@ Internet ──HTTPS──▶ Caddy (ports 80/443, auto-TLS via Let's Encrypt)
 2. Claude writes `~/.oci/config` from that snippet, runs `deploy/provision.sh`
    → network + VM created, public IP printed. (Every CLI command verified
    against the OCI CLI reference.)
-3. **Lance — one DNS record**: `mcp.beaconturn.com` → A record → the IP.
+3. **Lance — one DNS record**: `workforcemcp.beaconturn.com` → A record → the IP.
 4. Claude: scp env file + `deploy/setup_vm.sh` to the VM, run it, watch Caddy
    obtain the cert, then verify from outside: healthz, MCP initialize,
-   tools/list, and a real FRED tool call over https://mcp.beaconturn.com/mcp.
+   tools/list, and a real FRED tool call over https://workforcemcp.beaconturn.com/mcp.
 5. Only after (4) passes: update README/About URLs, keep Render as fallback
    for a transition window, then delete the keepalive workflow.
 

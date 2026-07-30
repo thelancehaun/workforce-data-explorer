@@ -58,4 +58,4 @@ sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -q caddy > /dev/null
 sudo mv ~/Caddyfile /etc/caddy/Caddyfile
 sudo systemctl enable caddy
 sudo systemctl restart caddy
-echo "== Done. Caddy will obtain the certificate once mcp.beaconturn.com resolves to this VM."
+echo "== Done. Caddy will obtain the certificate once workforcemcp.beaconturn.com resolves to this VM."
