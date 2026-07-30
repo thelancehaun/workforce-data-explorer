@@ -10,7 +10,7 @@ payrolls, the Anthropic Economic Index).
 | | What | Where |
 |---|---|---|
 | 🖥️ | **Live dashboard** — browse, chart, download. Zero setup. | [workforce-data-explorer.streamlit.app](https://workforce-data-explorer.streamlit.app) |
-| 🤖 | **AI connector (MCP)** — ask your own Claude or ChatGPT questions answered with live labor data | `https://workforce-data-mcp.onrender.com/mcp` |
+| 🤖 | **AI connector (MCP)** — ask your own Claude or ChatGPT questions answered with live labor data | `https://workforcemcp.beaconturn.com/mcp` |
 | ⚙️ | **Run it yourself** — clone this repo, bring free API keys | [Quick start](#run-it-yourself) below |
 
 ## What's inside
@@ -53,7 +53,7 @@ exposure by occupation — and your AI decides which to call.
 **Claude (claude.ai)** — requires a paid plan:
 
 1. Settings → **Connectors** → **Add custom connector**
-2. Name: `Workforce Data` — URL: `https://workforce-data-mcp.onrender.com/mcp`
+2. Name: `Workforce Data` — URL: `https://workforcemcp.beaconturn.com/mcp`
 3. In a new chat, ask something like *"What's happening with layoffs at public
    companies this month?"* or *"Compare software developer and nurse wages."*
 
@@ -93,8 +93,7 @@ exposure by occupation — and your AI decides which to call.
 claude mcp add --scope user workforce-data -- /path/to/workforce-data/.venv/bin/python /path/to/workforce-data/mcp_server.py
 ```
 
-> The hosted connector runs on a free tier that sleeps when idle — the first
-> question after a quiet spell takes ~30–60 seconds while it wakes up.
+> The hosted connector runs on an always-on server — no cold starts.
 
 ## ⚙️ Run it yourself
 
