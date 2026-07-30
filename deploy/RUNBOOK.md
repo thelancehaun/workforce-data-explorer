@@ -55,9 +55,25 @@ Internet ──HTTPS──▶ Caddy (ports 80/443, auto-TLS via Let's Encrypt)
 
 1. **Lance — 60 seconds, one time**: Oracle console → profile icon →
    **User settings** → **Token and keys** → **Add API Key** → **Paste a public
-   key** → paste the key Claude provides → **Add** → copy the "Configuration
-   File Preview" text shown → paste it back to Claude. (Steps verified against
-   Oracle's API-key docs.)
+   key** → paste this key (public — safe to share/commit) → **Add** → copy the
+   "Configuration File Preview" text shown → paste it back to Claude. (Steps
+   verified against Oracle's API-key docs.)
+
+   ```
+   -----BEGIN PUBLIC KEY-----
+   MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu+6epnJCqR330Nr3aWA/
+   SEwAsFk4ie03kwc0qKTrou3OWaBTmX4e3R8Lra+6JHlbUlbQikz7QXsYsG+wKIuM
+   KVGqekRrYU3bSIEtzi/NliKD+2HgiGLd/NJ4r4VEofTQr38cvYj3LFXyhyc4Kb8u
+   FMNfH74ddF1AuuS/woqOMgpWFyDRh16MjEozPNNdNOz1JR4VU5GXnX7LawvtZt05
+   3ykBSotsaMe9jWRhAsoieVNU+P+jj5bUrl/jPmdmOwLOy/WnDFpLTZIX7LDp5Tl2
+   VLPv+0/DJIqo+tHQHACiKWHF4f3ldamPFv8nmyoNyhR17Elo6Vl070rvC5BQtK6J
+   ewIDAQAB
+   -----END PUBLIC KEY-----
+   ```
+
+   ⚠️ Paste it exactly as shown, including the BEGIN/END lines. If Oracle's
+   dialog complains about format, remove any leading spaces the copy picked
+   up — each line should start flush left.
 2. Claude writes `~/.oci/config` from that snippet, runs `deploy/provision.sh`
    → network + VM created, public IP printed. (Every CLI command verified
    against the OCI CLI reference.)
